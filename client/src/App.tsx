@@ -1,3 +1,3 @@
 export default function App() {
-  return <div>Cepatkan Bayar</div>;
+  return <div className="bg-bg text-text">Cepatkan Bayar</div>;
 }
