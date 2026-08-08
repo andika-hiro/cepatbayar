@@ -1,0 +1,95 @@
+import { Router } from 'express';
+import { eq, inArray } from 'drizzle-orm';
+import { nanoid } from 'nanoid';
+import { z } from 'zod';
+import { db } from '../db/client';
+import { tripMembers, trips } from '../db/schema';
+import { requireAuth } from '../auth/requireAuth';
+
+const router = Router();
+
+const createTripSchema = z.object({
+  name: z.string().trim().min(1),
+  destination: z.string().trim().min(1),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  members: z.array(z.string().trim().min(1)).min(1),
+});
+
+async function summarizeTrips(tripRows: (typeof trips.$inferSelect)[]) {
+  if (tripRows.length === 0) return [];
+  const ids = tripRows.map((t) => t.id);
+  const members = await db.select().from(tripMembers).where(inArray(tripMembers.tripId, ids));
+  const countByTripId = new Map<number, number>();
+  for (const m of members) {
+    countByTripId.set(m.tripId, (countByTripId.get(m.tripId) ?? 0) + 1);
+  }
+  return tripRows.map((t) => ({
+    publicId: t.publicId,
+    name: t.name,
+    destination: t.destination,
+    startDate: t.startDate,
+    endDate: t.endDate,
+    memberCount: countByTripId.get(t.id) ?? 0,
+    unsettledCount: 0,
+  }));
+}
+
+router.post('/', requireAuth, async (req, res) => {
+  const parsed = createTripSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues });
+    return;
+  }
+  const { name, destination, startDate, endDate, members } = parsed.data;
+  const publicId = nanoid(16);
+
+  await db.insert(trips).values({ publicId, name, destination, startDate, endDate, creatorUserId: req.userId! });
+  const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+
+  await db.insert(tripMembers).values(members.map((memberName) => ({ tripId: trip.id, name: memberName })));
+
+  res.status(201).json({ publicId: trip.publicId });
+});
+
+router.get('/mine', requireAuth, async (req, res) => {
+  const rows = await db.select().from(trips).where(eq(trips.creatorUserId, req.userId!));
+  res.json(await summarizeTrips(rows));
+});
+
+const summarySchema = z.object({
+  publicIds: z.array(z.string()).max(50),
+});
+
+router.post('/summary', async (req, res) => {
+  const parsed = summarySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_body' });
+    return;
+  }
+  if (parsed.data.publicIds.length === 0) {
+    res.json([]);
+    return;
+  }
+  const rows = await db.select().from(trips).where(inArray(trips.publicId, parsed.data.publicIds));
+  res.json(await summarizeTrips(rows));
+});
+
+router.get('/:publicId', async (req, res) => {
+  const [trip] = await db.select().from(trips).where(eq(trips.publicId, req.params.publicId));
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+  res.json({
+    publicId: trip.publicId,
+    name: trip.name,
+    destination: trip.destination,
+    startDate: trip.startDate,
+    endDate: trip.endDate,
+    members: members.map((m) => ({ id: m.id, name: m.name })),
+  });
+});
+
+export default router;
