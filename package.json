@@ -8,6 +8,8 @@
     "test:server": "npm test --prefix server",
     "test:client": "npm test --prefix client",
     "test": "npm run test:server && npm run test:client",
-    "build": "npm run build --prefix client && npm run build --prefix server && rm -rf server/public && cp -r client/dist server/public"
+    "build": "npm run build --prefix client && npm run build --prefix server && rm -rf server/public && cp -r client/dist server/public",
+    "provision": "bash scripts/provision.sh",
+    "deploy": "bash scripts/deploy.sh"
   }
 }
