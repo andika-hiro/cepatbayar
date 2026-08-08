@@ -1,3 +1,12 @@
+import { Route, Routes } from 'react-router-dom';
+import RingkasanPlaceholderScreen from './screens/RingkasanPlaceholderScreen';
+import ProfilePlaceholderScreen from './screens/ProfilePlaceholderScreen';
+
 export default function App() {
-  return <div className="bg-bg text-text">Cepatkan Bayar</div>;
+  return (
+    <Routes>
+      <Route path="/t/:publicId/ringkasan" element={<RingkasanPlaceholderScreen />} />
+      <Route path="/profil" element={<ProfilePlaceholderScreen />} />
+    </Routes>
+  );
 }
