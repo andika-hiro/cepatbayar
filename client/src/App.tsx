@@ -10,6 +10,7 @@ import RiwayatPelunasanScreen from './screens/RiwayatPelunasanScreen';
 import PengaturanScreen from './screens/PengaturanScreen';
 import KelolaAnggotaScreen from './screens/KelolaAnggotaScreen';
 import RekeningDetailScreen from './screens/RekeningDetailScreen';
+import WaPreviewScreen from './screens/WaPreviewScreen';
 import ProfilePlaceholderScreen from './screens/ProfilePlaceholderScreen';
 
 export default function App() {
@@ -22,6 +23,7 @@ export default function App() {
       <Route path="/t/:publicId/riwayat" element={<RiwayatScreen />} />
       <Route path="/t/:publicId/subtrip/:subTripId" element={<SubTripDetailScreen />} />
       <Route path="/t/:publicId/saldo" element={<SaldoScreen />} />
+      <Route path="/t/:publicId/wa-preview" element={<WaPreviewScreen />} />
       <Route path="/t/:publicId/riwayat-pelunasan" element={<RiwayatPelunasanScreen />} />
       <Route path="/t/:publicId/pengaturan" element={<PengaturanScreen />} />
       <Route path="/t/:publicId/pengaturan/anggota" element={<KelolaAnggotaScreen />} />
@@ -30,4 +32,5 @@ export default function App() {
     </Routes>
   );
 }
+
 
