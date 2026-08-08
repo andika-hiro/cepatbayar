@@ -73,7 +73,8 @@ router.get('/verify', async (req, res) => {
     maxAge: SESSION_MAX_AGE_MS,
   });
 
-  res.redirect(safeRedirect);
+  const clientUrl = process.env.CLIENT_URL ?? '';
+  res.redirect(`${clientUrl}${safeRedirect}`);
 });
 
 router.get('/me', requireAuth, async (req, res) => {

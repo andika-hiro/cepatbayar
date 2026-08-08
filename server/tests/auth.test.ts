@@ -61,6 +61,22 @@ describe('GET /api/auth/verify', () => {
     expect(second.status).toBe(400);
   });
 
+  it('prefixes the redirect with CLIENT_URL when set, for cross-origin dev redirects', async () => {
+    const original = process.env.CLIENT_URL;
+    process.env.CLIENT_URL = 'http://localhost:5173';
+    try {
+      await request(app).post('/api/auth/request-link').send({ email: 'putri@example.com' });
+      const link = vi.mocked(sendMagicLinkEmail).mock.calls.at(-1)![1];
+      const token = new URL(link).searchParams.get('token')!;
+
+      const res = await request(app).get(`/api/auth/verify?token=${token}`);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe('http://localhost:5173/');
+    } finally {
+      process.env.CLIENT_URL = original;
+    }
+  });
+
   it('rejects a token whose auth_tokens row has already expired (expiry enforcement)', async () => {
     await db.insert(users).values({ email: 'expired-user@example.com' });
     const [user] = await db.select().from(users).where(eq(users.email, 'expired-user@example.com'));
