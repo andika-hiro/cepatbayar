@@ -241,6 +241,42 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     : [];
   const nameById = new Map(debtMembers.map((m) => [m.id, m.name]));
 
+  let items: {
+    id: number;
+    name: string;
+    price: number;
+    participants: { memberId: number; name: string; billedToMemberId: number | null; billedToName: string | null }[];
+  }[] = [];
+
+  if (subTrip.splitMode === 'per_item') {
+    const itemRows = await db.select().from(subTripItems).where(eq(subTripItems.subTripId, subTrip.id));
+    const itemIds = itemRows.map((i) => i.id);
+    const participantRows = itemIds.length
+      ? await db.select().from(subTripItemParticipants).where(inArray(subTripItemParticipants.itemId, itemIds))
+      : [];
+    const participantMemberIds = [
+      ...new Set(participantRows.flatMap((p) => (p.billedToMemberId ? [p.memberId, p.billedToMemberId] : [p.memberId]))),
+    ];
+    const participantMembers = participantMemberIds.length
+      ? await db.select().from(tripMembers).where(inArray(tripMembers.id, participantMemberIds))
+      : [];
+    const participantNameById = new Map(participantMembers.map((m) => [m.id, m.name]));
+
+    items = itemRows.map((item) => ({
+      id: item.id,
+      name: item.name,
+      price: item.price,
+      participants: participantRows
+        .filter((p) => p.itemId === item.id)
+        .map((p) => ({
+          memberId: p.memberId,
+          name: participantNameById.get(p.memberId) ?? '',
+          billedToMemberId: p.billedToMemberId,
+          billedToName: p.billedToMemberId ? participantNameById.get(p.billedToMemberId) ?? '' : null,
+        })),
+    }));
+  }
+
   res.json({
     id: subTrip.id,
     name: subTrip.name,
@@ -251,6 +287,10 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     amount: subTrip.amount,
     payerParticipates: subTrip.payerParticipates,
     createdByMemberId: subTrip.createdByMemberId,
+    splitMode: subTrip.splitMode,
+    taxPercent: Number(subTrip.taxPercent),
+    servicePercent: Number(subTrip.servicePercent),
+    items,
     debts: debtRows.map((d) => ({ id: d.id, memberId: d.memberId, name: nameById.get(d.memberId) ?? '', amount: d.amount, settled: d.settled })),
   });
 });

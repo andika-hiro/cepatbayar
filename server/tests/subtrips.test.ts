@@ -351,3 +351,48 @@ describe('POST /api/trips/:publicId/subtrips — per-item mode', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('GET /api/trips/:publicId/subtrips/:subTripId — per-item mode', () => {
+  it('returns splitMode, tax/service percents, and the item/participant breakdown', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-detail-peritem@example.com', ['Budi', 'Aji', 'Citra']);
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+    const citra = members.find((m) => m.name === 'Citra')!;
+
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan di Resto', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, createdByMemberId: budi.id,
+      splitMode: 'per_item', taxPercent: 10, servicePercent: 5,
+      items: [{ name: 'Nasi Goreng', price: 100000, participants: [{ memberId: aji.id, billedToMemberId: citra.id }] }],
+    });
+
+    const res = await request(app).get(`/api/trips/${publicId}/subtrips/${createRes.body.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.splitMode).toBe('per_item');
+    expect(res.body.taxPercent).toBe(10);
+    expect(res.body.servicePercent).toBe(5);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].name).toBe('Nasi Goreng');
+    expect(res.body.items[0].price).toBe(100000);
+    expect(res.body.items[0].participants).toHaveLength(1);
+    expect(res.body.items[0].participants[0].memberId).toBe(aji.id);
+    expect(res.body.items[0].participants[0].name).toBe('Aji');
+    expect(res.body.items[0].participants[0].billedToMemberId).toBe(citra.id);
+    expect(res.body.items[0].participants[0].billedToName).toBe('Citra');
+  });
+
+  it('returns an empty items array and splitMode "total" for a total-mode sub trip', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-detail-total@example.com', ['Budi']);
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: members[0].id, createdByMemberId: members[0].id,
+      splitMode: 'total', amount: 10000, participantMemberIds: [members[0].id],
+    });
+
+    const res = await request(app).get(`/api/trips/${publicId}/subtrips/${createRes.body.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.splitMode).toBe('total');
+    expect(res.body.items).toEqual([]);
+  });
+});
+
