@@ -8,6 +8,12 @@ import tripsRouter from './routes/trips';
 
 export function createApp() {
   const app = express();
+  // Trust the first hop (Apache reverse proxy on cPanel/Passenger) so
+  // req.ip is derived from X-Forwarded-For instead of always resolving to
+  // the proxy's own address — otherwise every client shares one rate-limit
+  // bucket. Do not use `true` (trusts the whole XFF chain, spoofable) or a
+  // number higher than the actual proxy hop count.
+  app.set('trust proxy', 1);
   app.use(express.json());
   app.use(cookieParser());
 

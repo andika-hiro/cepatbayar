@@ -24,4 +24,28 @@ describe('POST /api/auth/request-link rate limiting', () => {
     }
     expect(lastRes!.status).toBe(429);
   });
+
+  it('derives client IP from X-Forwarded-For when set (trust proxy behavior)', async () => {
+    const app = createApp();
+    for (let i = 0; i < 5; i++) {
+      const res = await request(app)
+        .post('/api/auth/request-link')
+        .set('X-Forwarded-For', '203.0.113.5')
+        .send({ email: `test${i}@example.com` });
+      expect(res.status).toBe(200);
+    }
+    // a 6th request from the SAME forwarded IP should be rate-limited
+    const limited = await request(app)
+      .post('/api/auth/request-link')
+      .set('X-Forwarded-For', '203.0.113.5')
+      .send({ email: 'test-limited@example.com' });
+    expect(limited.status).toBe(429);
+
+    // but a request from a DIFFERENT forwarded IP should NOT be limited yet
+    const differentIp = await request(app)
+      .post('/api/auth/request-link')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .send({ email: 'test-different-ip@example.com' });
+    expect(differentIp.status).toBe(200);
+  });
 });
