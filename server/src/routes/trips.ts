@@ -54,12 +54,16 @@ router.post('/', requireAuth, async (req, res) => {
   const { name, destination, startDate, endDate, members } = parsed.data;
   const publicId = nanoid(16);
 
-  await db.insert(trips).values({ publicId, name, destination, startDate, endDate, creatorUserId: req.userId! });
-  const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+  await db.transaction(async (tx) => {
+    const [result] = await tx
+      .insert(trips)
+      .values({ publicId, name, destination, startDate, endDate, creatorUserId: req.userId! });
+    const tripId = result.insertId;
 
-  await db.insert(tripMembers).values(members.map((memberName) => ({ tripId: trip.id, name: memberName })));
+    await tx.insert(tripMembers).values(members.map((memberName) => ({ tripId, name: memberName })));
+  });
 
-  res.status(201).json({ publicId: trip.publicId });
+  res.status(201).json({ publicId });
 });
 
 router.get('/mine', requireAuth, async (req, res) => {
