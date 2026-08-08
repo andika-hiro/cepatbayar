@@ -1,18 +1,9 @@
 import type { TripSummary } from '../lib/api';
+import { formatDateRange } from '../lib/format';
 
 interface TripCardProps {
   trip: TripSummary;
   onOpen: (publicId: string) => void;
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-
-function formatDateRange(startDate: string, endDate: string): string {
-  const fmt = (iso: string) => {
-    const [, month, day] = iso.split('-');
-    return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
-  };
-  return `${fmt(startDate)}–${fmt(endDate)}`;
 }
 
 export default function TripCard({ trip, onOpen }: TripCardProps) {
