@@ -21,6 +21,7 @@ async function createTestTripWithSubTrip(email: string, memberNames: string[]) {
   const subTripRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
     name: 'Makan', category: 'makan', date: '2026-01-01',
     payerMemberId: payer.id, amount: 40000, participantMemberIds: members.map((m) => m.id), createdByMemberId: payer.id,
+    splitMode: 'total',
   });
 
   return { publicId, trip, members, subTripId: subTripRes.body.id, cookie, creatorMemberId: payer.id };
@@ -35,6 +36,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'Makan Malam', category: 'makan', date: '2026-01-01',
         payerMemberId: members[0].id, amount: 60000, participantMemberIds: members.map((m) => m.id), createdByMemberId: members[0].id,
+        splitMode: 'total',
       });
     expect(res.status).toBe(200);
     const updated = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
@@ -50,6 +52,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'Makan Malam', category: 'makan', date: '2026-01-01',
         payerMemberId: members[0].id, amount: 50000, participantMemberIds: members.map((m) => m.id), createdByMemberId: members[0].id,
+        splitMode: 'total',
       });
     expect(res.status).toBe(200);
   });
@@ -63,6 +66,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'Hack', category: 'makan', date: '2026-01-01',
         payerMemberId: members[0].id, amount: 1, participantMemberIds: [members[0].id], createdByMemberId: members[0].id,
+        splitMode: 'total',
       });
     expect(res.status).toBe(403);
   });
@@ -79,6 +83,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'Makan', category: 'makan', date: '2026-01-01',
         payerMemberId: members[0].id, amount: 80000, participantMemberIds: members.map((m) => m.id), createdByMemberId: members[0].id,
+        splitMode: 'total',
       });
 
     const [updatedDebt] = await db.select().from(debts).where(eq(debts.memberId, aji.id));
@@ -97,6 +102,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'Makan', category: 'makan', date: '2026-01-01',
         payerMemberId: members[0].id, amount: 40000, participantMemberIds: [members[0].id], createdByMemberId: members[0].id,
+        splitMode: 'total',
       });
 
     const remainingDebts = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
@@ -111,6 +117,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'X', category: 'makan', date: '2026-01-01',
         payerMemberId: creatorMemberId, amount: 1000, participantMemberIds: [creatorMemberId], createdByMemberId: creatorMemberId,
+        splitMode: 'total',
       });
     expect(res.status).toBe(404);
   });
@@ -123,6 +130,7 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       .send({
         name: 'X', category: 'makan', date: '2026-01-01',
         payerMemberId: creatorMemberId, amount: 1000, participantMemberIds: [creatorMemberId], createdByMemberId: creatorMemberId,
+        splitMode: 'total',
       });
     expect(res.status).toBe(404);
   });
@@ -148,6 +156,7 @@ describe('payer participation (payerParticipates) round trip', () => {
       payerMemberId: budi.id, amount: 100000,
       participantMemberIds: [aji.id, citra.id],
       createdByMemberId: budi.id,
+      splitMode: 'total',
     });
     expect(subTripRes.status).toBe(201);
     const subTripId = subTripRes.body.id;
@@ -168,6 +177,7 @@ describe('payer participation (payerParticipates) round trip', () => {
         payerMemberId: budi.id, amount: 100000,
         participantMemberIds: [aji.id, citra.id],
         createdByMemberId: budi.id,
+        splitMode: 'total',
       });
     expect(patchRes.status).toBe(200);
 

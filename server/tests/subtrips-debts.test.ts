@@ -20,6 +20,7 @@ async function createTripWithDebt() {
   const subTripRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
     name: 'Makan', category: 'makan', date: '2026-01-01',
     payerMemberId: members[0].id, amount: 40000, participantMemberIds: members.map((m) => m.id), createdByMemberId: members[0].id,
+    splitMode: 'total',
   });
   const [debtRow] = await db.select().from(debts).where(eq(debts.subTripId, subTripRes.body.id));
 

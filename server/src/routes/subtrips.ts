@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { db } from '../db/client';
-import { debts, subTrips, tripMembers } from '../db/schema';
+import { debts, subTrips, tripMembers, subTripItems, subTripItemParticipants } from '../db/schema';
 import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
 import { computeEqualShares, reconcileDebts } from '../lib/splitLogic';
+import { computeItemBasedShares } from '../lib/itemSplitLogic';
 import { isoDateSchema } from '../lib/validators';
 import { attachUserIfPresent } from '../auth/attachUserIfPresent';
 
@@ -13,15 +14,41 @@ const router = Router({ mergeParams: true });
 
 const categoryEnum = z.enum(['makan', 'transport', 'nginap', 'tiket_wisata', 'lainnya']);
 
-export const subTripInputSchema = z.object({
+const itemParticipantSchema = z.object({
+  memberId: z.number().int().positive(),
+  billedToMemberId: z.number().int().positive().optional(),
+});
+
+const itemInputSchema = z.object({
+  name: z.string().trim().min(1),
+  price: z.number().int().positive(),
+  participants: z.array(itemParticipantSchema).min(1),
+});
+
+const totalModeSchema = z.object({
   name: z.string().trim().min(1),
   category: categoryEnum,
   date: isoDateSchema,
   payerMemberId: z.number().int().positive(),
+  createdByMemberId: z.number().int().positive(),
+  splitMode: z.literal('total'),
   amount: z.number().int().positive(),
   participantMemberIds: z.array(z.number().int().positive()).min(1),
-  createdByMemberId: z.number().int().positive(),
 });
+
+const perItemModeSchema = z.object({
+  name: z.string().trim().min(1),
+  category: categoryEnum,
+  date: isoDateSchema,
+  payerMemberId: z.number().int().positive(),
+  createdByMemberId: z.number().int().positive(),
+  splitMode: z.literal('per_item'),
+  taxPercent: z.number().min(0).max(100).default(0),
+  servicePercent: z.number().min(0).max(100).default(0),
+  items: z.array(itemInputSchema).min(1),
+});
+
+export const subTripInputSchema = z.discriminatedUnion('splitMode', [totalModeSchema, perItemModeSchema]);
 
 // Exported so tests can reset the counter between cases — the store is a
 // module-level singleton keyed by client IP, and every supertest request in
@@ -86,28 +113,72 @@ router.post<{ publicId: string }>('/', createSubTripLimiter, async (req, res) =>
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues });
     return;
   }
-  const { name, category, date, payerMemberId, amount, participantMemberIds, createdByMemberId } = parsed.data;
+  const data = parsed.data;
 
-  const allIds = [...new Set([payerMemberId, createdByMemberId, ...participantMemberIds])];
+  if (data.splitMode === 'total') {
+    const allIds = [...new Set([data.payerMemberId, data.createdByMemberId, ...data.participantMemberIds])];
+    const valid = await memberIdsBelongToTrip(trip.id, allIds);
+    if (!valid) {
+      res.status(400).json({ error: 'invalid_member' });
+      return;
+    }
+
+    const shares = computeEqualShares(data.amount, data.participantMemberIds, data.payerMemberId);
+    const payerParticipates = data.participantMemberIds.includes(data.payerMemberId);
+
+    const subTripId = await db.transaction(async (tx) => {
+      const [result] = await tx.insert(subTrips).values({
+        tripId: trip.id, name: data.name, category: data.category, date: data.date,
+        payerMemberId: data.payerMemberId, amount: data.amount, payerParticipates,
+        createdByMemberId: data.createdByMemberId, splitMode: 'total',
+      });
+      const newSubTripId = result.insertId;
+      if (shares.size > 0) {
+        await tx.insert(debts).values(
+          [...shares.entries()].map(([memberId, amount]) => ({ subTripId: newSubTripId, memberId, amount })),
+        );
+      }
+      return newSubTripId;
+    });
+
+    res.status(201).json({ id: subTripId });
+    return;
+  }
+
+  // splitMode === 'per_item'
+  const itemMemberIds = data.items.flatMap((item) =>
+    item.participants.flatMap((p) => (p.billedToMemberId ? [p.memberId, p.billedToMemberId] : [p.memberId])),
+  );
+  const allIds = [...new Set([data.payerMemberId, data.createdByMemberId, ...itemMemberIds])];
   const valid = await memberIdsBelongToTrip(trip.id, allIds);
   if (!valid) {
     res.status(400).json({ error: 'invalid_member' });
     return;
   }
 
-  const shares = computeEqualShares(amount, participantMemberIds, payerMemberId);
-  const payerParticipates = participantMemberIds.includes(payerMemberId);
+  const split = computeItemBasedShares(data.items, data.taxPercent, data.servicePercent, data.payerMemberId);
+  const payerParticipates = data.items.some((item) => item.participants.some((p) => p.memberId === data.payerMemberId));
 
   const subTripId = await db.transaction(async (tx) => {
-    const [result] = await tx.insert(subTrips).values({
-      tripId: trip.id, name, category, date, payerMemberId, amount, payerParticipates, createdByMemberId,
+    const [insertResult] = await tx.insert(subTrips).values({
+      tripId: trip.id, name: data.name, category: data.category, date: data.date,
+      payerMemberId: data.payerMemberId, amount: split.grandTotal, payerParticipates,
+      createdByMemberId: data.createdByMemberId, splitMode: 'per_item',
+      taxPercent: data.taxPercent, servicePercent: data.servicePercent,
     });
-    const newSubTripId = result.insertId;
-    if (shares.size > 0) {
+    const newSubTripId = insertResult.insertId;
+
+    for (const item of data.items) {
+      const [itemResult] = await tx.insert(subTripItems).values({ subTripId: newSubTripId, name: item.name, price: item.price });
+      const newItemId = itemResult.insertId;
+      await tx.insert(subTripItemParticipants).values(
+        item.participants.map((p) => ({ itemId: newItemId, memberId: p.memberId, billedToMemberId: p.billedToMemberId ?? null })),
+      );
+    }
+
+    if (split.shares.size > 0) {
       await tx.insert(debts).values(
-        [...shares.entries()].map(([memberId, shareAmount]) => ({
-          subTripId: newSubTripId, memberId, amount: shareAmount,
-        })),
+        [...split.shares.entries()].map(([memberId, amount]) => ({ subTripId: newSubTripId, memberId, amount })),
       );
     }
     return newSubTripId;
@@ -199,6 +270,10 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
   const parsed = subTripInputSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues });
+    return;
+  }
+  if (parsed.data.splitMode !== 'total') {
+    res.status(400).json({ error: 'invalid_body' });
     return;
   }
   const { name, category, date, payerMemberId, amount, participantMemberIds, createdByMemberId } = parsed.data;

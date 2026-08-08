@@ -45,6 +45,7 @@ describe('POST /api/trips/:publicId/subtrips rate limiting', () => {
         .send({
           name: `Item ${i}`, category: 'makan', date: '2026-01-01',
           payerMemberId: budi.id, amount: 1000, participantMemberIds: [budi.id], createdByMemberId: budi.id,
+          splitMode: 'total',
         });
     }
     expect(lastRes!.status).toBe(429);
@@ -61,6 +62,7 @@ describe('POST /api/trips/:publicId/subtrips rate limiting', () => {
         .send({
           name: `Item ${i}`, category: 'makan', date: '2026-01-01',
           payerMemberId: budi.id, amount: 1000, participantMemberIds: [budi.id], createdByMemberId: budi.id,
+          splitMode: 'total',
         });
       expect(res.status).toBe(201);
     }

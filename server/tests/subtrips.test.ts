@@ -3,7 +3,7 @@ import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { db } from '../src/db/client';
-import { trips, tripMembers, debts } from '../src/db/schema';
+import { trips, tripMembers, debts, subTrips, subTripItems, subTripItemParticipants } from '../src/db/schema';
 import { createAuthedUser } from './helpers/auth';
 
 const app = createApp();
@@ -31,6 +31,7 @@ describe('POST /api/trips/:publicId/subtrips', () => {
       payerMemberId: budi.id, amount: 90000,
       participantMemberIds: [budi.id, aji.id, citra.id],
       createdByMemberId: budi.id,
+      splitMode: 'total',
     });
     expect(res.status).toBe(201);
     expect(res.body.id).toBeTypeOf('number');
@@ -48,6 +49,7 @@ describe('POST /api/trips/:publicId/subtrips', () => {
     const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: members[0].id, amount: 10000, participantMemberIds: [], createdByMemberId: members[0].id,
+      splitMode: 'total',
     });
     expect(res.status).toBe(400);
   });
@@ -59,6 +61,7 @@ describe('POST /api/trips/:publicId/subtrips', () => {
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: otherMembers[0].id, amount: 10000,
       participantMemberIds: [otherMembers[0].id], createdByMemberId: otherMembers[0].id,
+      splitMode: 'total',
     });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('invalid_member');
@@ -68,6 +71,7 @@ describe('POST /api/trips/:publicId/subtrips', () => {
     const res = await request(app).post('/api/trips/does-not-exist/subtrips').send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: 1, amount: 10000, participantMemberIds: [1], createdByMemberId: 1,
+      splitMode: 'total',
     });
     expect(res.status).toBe(404);
   });
@@ -77,6 +81,7 @@ describe('POST /api/trips/:publicId/subtrips', () => {
     const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
       name: 'Makan', category: 'olahraga', date: '2026-01-01',
       payerMemberId: members[0].id, amount: 10000, participantMemberIds: [members[0].id], createdByMemberId: members[0].id,
+      splitMode: 'total',
     });
     expect(res.status).toBe(400);
   });
@@ -91,6 +96,7 @@ describe('GET /api/trips/:publicId/subtrips', () => {
     await request(app).post(`/api/trips/${publicId}/subtrips`).send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+      splitMode: 'total',
     });
 
     const res = await request(app).get(`/api/trips/${publicId}/subtrips`);
@@ -123,6 +129,7 @@ describe('GET /api/trips/:publicId/subtrips/:subTripId', () => {
     const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+      splitMode: 'total',
     });
 
     const res = await request(app).get(`/api/trips/${publicId}/subtrips/${createRes.body.id}`);
@@ -142,6 +149,7 @@ describe('GET /api/trips/:publicId/subtrips/:subTripId', () => {
     const createRes = await request(app).post(`/api/trips/${publicIdA}/subtrips`).send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: membersA[0].id, amount: 10000, participantMemberIds: [membersA[0].id], createdByMemberId: membersA[0].id,
+      splitMode: 'total',
     });
 
     const res = await request(app).get(`/api/trips/${publicIdB}/subtrips/${createRes.body.id}`);
@@ -171,6 +179,7 @@ describe('end-to-end: create → summary → settle → summary → edit', () =>
     const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+      splitMode: 'total',
     });
     expect(createRes.status).toBe(201);
     const subTripId = createRes.body.id;
@@ -208,6 +217,7 @@ describe('end-to-end: create → summary → settle → summary → edit', () =>
       .send({
         name: 'Makan', category: 'makan', date: '2026-01-01',
         payerMemberId: budi.id, amount: 80000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+        splitMode: 'total',
       });
     expect(patchRes.status).toBe(200);
 
@@ -233,6 +243,7 @@ describe('createdByMemberId immutability', () => {
     const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
       name: 'Makan', category: 'makan', date: '2026-01-01',
       payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+      splitMode: 'total',
     });
     expect(createRes.status).toBe(201);
     const subTripId = createRes.body.id;
@@ -245,11 +256,98 @@ describe('createdByMemberId immutability', () => {
       .send({
         name: 'Makan Malam', category: 'makan', date: '2026-01-01',
         payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: aji.id,
+        splitMode: 'total',
       });
     expect(patchRes.status).toBe(200);
 
     const detailRes = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
     expect(detailRes.body.createdByMemberId).toBe(budi.id);
     expect(detailRes.body.createdByMemberId).not.toBe(aji.id);
+  });
+});
+
+describe('POST /api/trips/:publicId/subtrips — per-item mode', () => {
+  it('creates a per-item sub trip, computing debts and the grand total from the items', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-peritem1@example.com', ['Budi', 'Aji']);
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan di Resto', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, createdByMemberId: budi.id,
+      splitMode: 'per_item', taxPercent: 10, servicePercent: 0,
+      items: [{ name: 'Nasi Goreng', price: 100000, participants: [{ memberId: aji.id }] }],
+    });
+    expect(res.status).toBe(201);
+
+    const [subTrip] = await db.select().from(subTrips).where(eq(subTrips.id, res.body.id));
+    expect(subTrip.splitMode).toBe('per_item');
+    expect(subTrip.amount).toBe(110000); // 100000 + 10% tax
+
+    const debtRows = await db.select().from(debts).where(eq(debts.subTripId, res.body.id));
+    expect(debtRows).toHaveLength(1);
+    expect(debtRows[0].memberId).toBe(aji.id);
+    expect(debtRows[0].amount).toBe(110000);
+  });
+
+  it('stores the item and its participants, including a Tagihkan ke redirect', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-peritem2@example.com', ['Budi', 'Aji', 'Citra']);
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+    const citra = members.find((m) => m.name === 'Citra')!;
+
+    const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan di Resto', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, createdByMemberId: budi.id,
+      splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+      items: [{ name: 'Es Teh', price: 20000, participants: [{ memberId: aji.id, billedToMemberId: citra.id }] }],
+    });
+    expect(res.status).toBe(201);
+
+    const itemRows = await db.select().from(subTripItems).where(eq(subTripItems.subTripId, res.body.id));
+    expect(itemRows).toHaveLength(1);
+    const participantRows = await db.select().from(subTripItemParticipants).where(eq(subTripItemParticipants.itemId, itemRows[0].id));
+    expect(participantRows).toHaveLength(1);
+    expect(participantRows[0].memberId).toBe(aji.id);
+    expect(participantRows[0].billedToMemberId).toBe(citra.id);
+
+    // the debt itself belongs to citra (the redirect target), not aji
+    const debtRows = await db.select().from(debts).where(eq(debts.subTripId, res.body.id));
+    expect(debtRows).toHaveLength(1);
+    expect(debtRows[0].memberId).toBe(citra.id);
+    expect(debtRows[0].amount).toBe(20000);
+  });
+
+  it('rejects a per-item body with zero items', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-peritem3@example.com', ['Budi']);
+    const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: members[0].id, createdByMemberId: members[0].id,
+      splitMode: 'per_item', taxPercent: 0, servicePercent: 0, items: [],
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a billedToMemberId that belongs to a different trip', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-peritem4a@example.com', ['Budi', 'Aji']);
+    const { members: otherMembers } = await createTestTrip('subtrip-peritem4b@example.com', ['Dedi']);
+    const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: members[0].id, createdByMemberId: members[0].id,
+      splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+      items: [{ name: 'Item', price: 10000, participants: [{ memberId: members[1].id, billedToMemberId: otherMembers[0].id }] }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_member');
+  });
+
+  it('rejects a body missing splitMode entirely', async () => {
+    const { publicId, members } = await createTestTrip('subtrip-peritem5@example.com', ['Budi']);
+    const res = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: members[0].id, createdByMemberId: members[0].id,
+      amount: 10000, participantMemberIds: [members[0].id],
+    });
+    expect(res.status).toBe(400);
   });
 });
