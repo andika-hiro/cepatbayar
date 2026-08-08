@@ -22,6 +22,61 @@ export interface TripDetail {
   members: TripMember[];
 }
 
+export type SubTripCategory = 'makan' | 'transport' | 'nginap' | 'tiket_wisata' | 'lainnya';
+
+export interface MemberSummary {
+  memberId: number;
+  name: string;
+  rollup: number;
+  status: 'dilunasin' | 'ngutang' | 'lunas';
+}
+
+export interface TripSummaryDetail {
+  members: MemberSummary[];
+  tripTotal: number;
+}
+
+export interface SubTripListItem {
+  id: number;
+  name: string;
+  category: SubTripCategory;
+  date: string;
+  payerMemberId: number;
+  payerName: string;
+  amount: number;
+  unsettledCount: number;
+}
+
+export interface DebtItem {
+  id: number;
+  memberId: number;
+  name: string;
+  amount: number;
+  settled: boolean;
+}
+
+export interface SubTripDetail {
+  id: number;
+  name: string;
+  category: SubTripCategory;
+  date: string;
+  payerMemberId: number;
+  payerName: string;
+  amount: number;
+  createdByMemberId: number;
+  debts: DebtItem[];
+}
+
+export interface SubTripInput {
+  name: string;
+  category: SubTripCategory;
+  date: string;
+  payerMemberId: number;
+  amount: number;
+  participantMemberIds: number[];
+  createdByMemberId: number;
+}
+
 export interface CurrentUser {
   id: number;
   email: string;
@@ -56,6 +111,27 @@ export const api = {
   tripSummaries: (publicIds: string[]) =>
     request<TripSummary[]>('/trips/summary', { method: 'POST', body: JSON.stringify({ publicIds }) }),
   tripDetail: (publicId: string) => request<TripDetail>(`/trips/${publicId}`),
+  tripSummary: (publicId: string) => request<TripSummaryDetail>(`/trips/${publicId}/summary`),
+  listSubTrips: (publicId: string) => request<SubTripListItem[]>(`/trips/${publicId}/subtrips`),
+  createSubTrip: (publicId: string, input: SubTripInput) =>
+    request<{ id: number }>(`/trips/${publicId}/subtrips`, { method: 'POST', body: JSON.stringify(input) }),
+  getSubTrip: (publicId: string, subTripId: number) => request<SubTripDetail>(`/trips/${publicId}/subtrips/${subTripId}`),
+  updateSubTrip: (publicId: string, subTripId: number, input: SubTripInput, memberId: number) =>
+    request<{ id: number }>(`/trips/${publicId}/subtrips/${subTripId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+      headers: { 'X-Member-Id': String(memberId) },
+    }),
+  deleteSubTrip: (publicId: string, subTripId: number, memberId: number) =>
+    request<{ ok: true }>(`/trips/${publicId}/subtrips/${subTripId}`, {
+      method: 'DELETE',
+      headers: { 'X-Member-Id': String(memberId) },
+    }),
+  toggleDebtSettled: (publicId: string, subTripId: number, debtId: number, settled: boolean) =>
+    request<{ ok: true }>(`/trips/${publicId}/subtrips/${subTripId}/debts/${debtId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ settled }),
+    }),
   createTrip: (input: { name: string; destination: string; startDate: string; endDate: string; members: string[] }) =>
     request<{ publicId: string }>('/trips', { method: 'POST', body: JSON.stringify(input) }),
 };
