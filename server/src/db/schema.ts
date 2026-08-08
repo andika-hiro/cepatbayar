@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, timestamp, date, mysqlEnum, boolean } from 'drizzle-orm/mysql-core';
+import { mysqlTable, int, varchar, timestamp, date, mysqlEnum, boolean, decimal, foreignKey } from 'drizzle-orm/mysql-core';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -43,6 +43,9 @@ export const subTrips = mysqlTable('sub_trips', {
   payerMemberId: int('payer_member_id').notNull().references(() => tripMembers.id),
   amount: int('amount').notNull(),
   payerParticipates: boolean('payer_participates').notNull().default(true),
+  splitMode: mysqlEnum('split_mode', ['total', 'per_item']).notNull().default('total'),
+  taxPercent: decimal('tax_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default('0'),
+  servicePercent: decimal('service_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default('0'),
   createdByMemberId: int('created_by_member_id').notNull().references(() => tripMembers.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedByMemberId: int('updated_by_member_id'),
@@ -58,3 +61,23 @@ export const debts = mysqlTable('debts', {
   settledAt: timestamp('settled_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
+
+export const subTripItems = mysqlTable('sub_trip_items', {
+  id: int('id').autoincrement().primaryKey(),
+  subTripId: int('sub_trip_id').notNull().references(() => subTrips.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  price: int('price').notNull(),
+});
+
+export const subTripItemParticipants = mysqlTable('sub_trip_item_participants', {
+  id: int('id').autoincrement().primaryKey(),
+  itemId: int('item_id').notNull().references(() => subTripItems.id),
+  memberId: int('member_id').notNull().references(() => tripMembers.id),
+  billedToMemberId: int('billed_to_member_id'),
+}, (table) => [
+  foreignKey({
+    columns: [table.billedToMemberId],
+    foreignColumns: [tripMembers.id],
+    name: 'stip_btm_fk',
+  }),
+]);
