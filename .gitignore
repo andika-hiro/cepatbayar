@@ -5,3 +5,4 @@ server/public/
 .env.test
 *.log
 *.tsbuildinfo
+.worktrees/
