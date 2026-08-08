@@ -54,7 +54,7 @@ export default function AddEditSubTripSheet({
         }))
       : [{ key: 'item-0', name: '', priceText: '', participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })) }],
   );
-  const nextItemKeyRef = useRef(items.length);
+  const nextItemKeyRef = useRef(Date.now());
 
   function addItem() {
     setItems((prev) => [

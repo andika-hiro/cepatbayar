@@ -241,6 +241,30 @@ describe('AddEditSubTripSheet — item editor', () => {
     expect(screen.getByDisplayValue('Nasi')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Es Teh')).toBeInTheDocument();
   });
+
+  it('does not produce duplicate keys when adding items in edit mode', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const initialData = {
+      id: 5, name: 'Makan', category: 'makan' as const, date: '2026-01-01',
+      payerMemberId: 1, payerName: 'Budi', amount: 50000, payerParticipates: true, createdByMemberId: 1,
+      splitMode: 'per_item' as const, taxPercent: 0, servicePercent: 0, debts: [],
+      items: [
+        { id: 1, name: 'Nasi', price: 20000, participants: [{ memberId: 1, name: 'Budi', billedToMemberId: null, billedToName: null }] },
+        { id: 2, name: 'Es Teh', price: 5000, participants: [{ memberId: 2, name: 'Aji', billedToMemberId: null, billedToName: null }] },
+      ],
+    };
+    render(
+      <AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="edit" initialData={initialData} onClose={() => {}} onSaved={() => {}} />,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByText('+ Tambah item'));
+    
+    const keyWarnings = consoleSpy.mock.calls.filter((call) =>
+      call[0]?.includes?.('Encountered two children with the same key'),
+    );
+    expect(keyWarnings).toHaveLength(0);
+    consoleSpy.mockRestore();
+  });
 });
 
 
