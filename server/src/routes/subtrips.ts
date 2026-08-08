@@ -241,4 +241,39 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
   res.status(200).json({ ok: true });
 });
 
+const toggleDebtSchema = z.object({ settled: z.boolean() });
+
+router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTripId/debts/:debtId', async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const parsed = toggleDebtSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_body' });
+    return;
+  }
+
+  const subTripId = Number(req.params.subTripId);
+  const debtId = Number(req.params.debtId);
+  const [subTrip] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
+  if (!subTrip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const [debt] = await db.select().from(debts).where(and(eq(debts.id, debtId), eq(debts.subTripId, subTripId)));
+  if (!debt) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  await db
+    .update(debts)
+    .set({ settled: parsed.data.settled, settledAt: parsed.data.settled ? new Date() : null })
+    .where(eq(debts.id, debtId));
+
+  res.status(200).json({ ok: true });
+});
+
 export default router;
