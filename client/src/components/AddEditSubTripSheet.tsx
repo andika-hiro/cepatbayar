@@ -166,8 +166,11 @@ export default function AddEditSubTripSheet({
     }
   }
 
+  return (
+    <div className="fixed inset-0 z-20 flex flex-col bg-bg">
 
       <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+
         <button onClick={onClose} className="font-inter text-sm text-sub">
           Batal
         </button>

@@ -107,16 +107,16 @@ export default function WaPreviewScreen() {
           </div>
         ) : (
           saldoData.deposits.map((dep) => {
-            const personalText = `Halo ${dep.fromMemberName}, saldo deposit kamu ke ${dep.toMemberName} di trip ${trip.name} tersisa ${formatRupiah(dep.remainingAmount)}. Mohon top-up deposit jika perlu. Terima kasih!`;
+            const personalText = `Halo ${dep.fromName}, saldo deposit kamu ke ${dep.toName} di trip ${trip.name} tersisa ${formatRupiah(dep.remainingBalance)}. Mohon top-up deposit jika perlu. Terima kasih!`;
             const personalUrl = `https://wa.me/?text=${encodeURIComponent(personalText)}`;
             return (
-              <div key={dep.id} className="flex items-center justify-between rounded-card border border-border bg-surface p-3.5">
+              <div key={`${dep.fromMemberId}-${dep.toMemberId}`} className="flex items-center justify-between rounded-card border border-border bg-surface p-3.5">
                 <div>
                   <div className="font-inter text-xs font-semibold text-text">
-                    Deposit {dep.fromMemberName} → {dep.toMemberName}
+                    Deposit {dep.fromName} → {dep.toName}
                   </div>
                   <div className="font-mono text-xs text-sub">
-                    Sisa {formatRupiah(dep.remainingAmount)} (total {formatRupiah(dep.totalAmount)})
+                    Sisa {formatRupiah(dep.remainingBalance)} (total {formatRupiah(dep.totalAmount)})
                   </div>
                 </div>
                 <a
@@ -130,6 +130,7 @@ export default function WaPreviewScreen() {
               </div>
             );
           })
+
         )}
       </div>
     </div>
