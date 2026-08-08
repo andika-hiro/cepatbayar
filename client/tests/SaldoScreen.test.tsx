@@ -27,9 +27,10 @@ describe('SaldoScreen', () => {
   it('renders all debts and deposit summaries', async () => {
     vi.mocked(api.getSaldoData).mockResolvedValue({
       rollupMembers: [
-        { memberId: 1, name: 'Adit', rollup: 10000, status: 'pos' },
-        { memberId: 2, name: 'Budi', rollup: -10000, status: 'neg' },
+        { memberId: 1, name: 'Adit', rollup: 10000, status: 'dilunasin' },
+        { memberId: 2, name: 'Budi', rollup: -10000, status: 'ngutang' },
       ],
+
       unsettledDebts: [
         {
           id: 1,

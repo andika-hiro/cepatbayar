@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom';
 
 interface BottomNavTripLevelProps {
   publicId: string;
-  active: 'ringkasan' | 'riwayat' | 'saldo';
-  onAddClick: () => void;
+  active: 'ringkasan' | 'riwayat' | 'saldo' | 'profil';
+  onAddClick?: () => void;
 }
 
 export default function BottomNavTripLevel({ publicId, active, onAddClick }: BottomNavTripLevelProps) {
@@ -24,12 +24,13 @@ export default function BottomNavTripLevel({ publicId, active, onAddClick }: Bot
       >
         +
       </button>
-      <Link to={`/t/${publicId}/riwayat`} className="flex flex-col items-center gap-[3px]">
+      <Link to={`/t/${publicId}/saldo`} className="flex flex-col items-center gap-[3px]">
         <span className={itemClass('saldo')}>Saldo</span>
       </Link>
-      <Link to="/profil" className="flex flex-col items-center gap-[3px]">
-        <span className="font-inter text-[10px] font-medium text-sub">Profil</span>
+      <Link to={`/t/${publicId}/pengaturan`} className="flex flex-col items-center gap-[3px]">
+        <span className={itemClass('profil')}>Profil</span>
       </Link>
     </div>
   );
 }
+
