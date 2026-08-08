@@ -4,8 +4,9 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
 import { debts, subTrips, tripMembers } from '../db/schema';
 import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
-import { computeEqualShares } from '../lib/splitLogic';
+import { computeEqualShares, reconcileDebts } from '../lib/splitLogic';
 import { isoDateSchema } from '../lib/validators';
+import { attachUserIfPresent } from '../auth/attachUserIfPresent';
 
 const router = Router({ mergeParams: true });
 
@@ -20,6 +21,13 @@ export const subTripInputSchema = z.object({
   participantMemberIds: z.array(z.number().int().positive()).min(1),
   createdByMemberId: z.number().int().positive(),
 });
+
+async function canModifySubTrip(req: import('express').Request, trip: NonNullable<Awaited<ReturnType<typeof getTripByPublicId>>>, createdByMemberId: number): Promise<boolean> {
+  const isCreatorUser = req.userId !== undefined && req.userId === trip.creatorUserId;
+  const claimedMemberIdHeader = req.header('X-Member-Id');
+  const isOriginalAdder = claimedMemberIdHeader !== undefined && Number(claimedMemberIdHeader) === createdByMemberId;
+  return isCreatorUser || isOriginalAdder;
+}
 
 router.post<{ publicId: string }>('/', async (req, res) => {
   const trip = await getTripByPublicId(req.params.publicId);
@@ -135,6 +143,102 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     createdByMemberId: subTrip.createdByMemberId,
     debts: debtRows.map((d) => ({ id: d.id, memberId: d.memberId, name: nameById.get(d.memberId) ?? '', amount: d.amount, settled: d.settled })),
   });
+});
+
+router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserIfPresent, async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const subTripId = Number(req.params.subTripId);
+  const [existing] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
+  if (!existing) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  const authorized = await canModifySubTrip(req, trip, existing.createdByMemberId);
+  if (!authorized) {
+    res.status(403).json({ error: 'forbidden' });
+    return;
+  }
+
+  const parsed = subTripInputSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues });
+    return;
+  }
+  const { name, category, date, payerMemberId, amount, participantMemberIds, createdByMemberId } = parsed.data;
+
+  const allIds = [...new Set([payerMemberId, createdByMemberId, ...participantMemberIds])];
+  const valid = await memberIdsBelongToTrip(trip.id, allIds);
+  if (!valid) {
+    res.status(400).json({ error: 'invalid_member' });
+    return;
+  }
+
+  const shares = computeEqualShares(amount, participantMemberIds, payerMemberId);
+  const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+  const reconciled = reconcileDebts(
+    existingDebtRows.map((d) => ({ id: d.id, memberId: d.memberId, settled: d.settled })),
+    shares,
+  );
+
+  const claimedMemberIdHeader = req.header('X-Member-Id');
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(subTrips)
+      .set({
+        name,
+        category,
+        date,
+        payerMemberId,
+        amount,
+        updatedByMemberId: claimedMemberIdHeader ? Number(claimedMemberIdHeader) : existing.createdByMemberId,
+      })
+      .where(eq(subTrips.id, subTripId));
+
+    for (const del of reconciled.toDelete) {
+      await tx.delete(debts).where(eq(debts.id, del.id));
+    }
+    for (const upd of reconciled.toUpdateAmount) {
+      await tx.update(debts).set({ amount: upd.amount }).where(eq(debts.id, upd.id));
+    }
+    if (reconciled.toInsert.length > 0) {
+      await tx.insert(debts).values(reconciled.toInsert.map((i) => ({ subTripId, memberId: i.memberId, amount: i.amount })));
+    }
+  });
+
+  res.status(200).json({ id: subTripId });
+});
+
+router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUserIfPresent, async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const subTripId = Number(req.params.subTripId);
+  const [existing] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
+  if (!existing) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  const authorized = await canModifySubTrip(req, trip, existing.createdByMemberId);
+  if (!authorized) {
+    res.status(403).json({ error: 'forbidden' });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(debts).where(eq(debts.subTripId, subTripId));
+    await tx.delete(subTrips).where(eq(subTrips.id, subTripId));
+  });
+
+  res.status(200).json({ ok: true });
 });
 
 export default router;
