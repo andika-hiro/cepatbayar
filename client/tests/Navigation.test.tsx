@@ -10,7 +10,8 @@ describe('navigation shell', () => {
         <App />
       </MemoryRouter>,
     );
-    expect(await screen.findByText('Pengaturan segera hadir')).toBeInTheDocument();
+    expect(await screen.findByText('Profil & Akun')).toBeInTheDocument();
+
     expect(screen.getByText('Beranda')).toBeInTheDocument();
     expect(screen.getByText('Profil')).toBeInTheDocument();
   });

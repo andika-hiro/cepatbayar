@@ -8,7 +8,12 @@ const publicDir = path.join(__dirname, '../public');
 const indexPath = path.join(publicDir, 'index.html');
 
 describe('static file serving / SPA fallback (not built)', () => {
+  beforeAll(() => {
+    fs.rmSync(publicDir, { recursive: true, force: true });
+  });
+
   it('returns 404 with a helpful message for a non-API path when no build exists', async () => {
+
     const res = await request(createApp()).get('/some-client-route');
     expect(res.status).toBe(404);
     expect(res.text).toContain('Not built yet');

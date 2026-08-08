@@ -262,6 +262,8 @@ export const api = {
     request<{ success: true }>(`/trips/${publicId}/members/${memberId}/accounts/${accountId}`, { method: 'DELETE' }),
   scanReceipt: (imageBase64: string) =>
     request<OcrScanResult>('/ocr/scan', { method: 'POST', body: JSON.stringify({ imageBase64 }) }),
+  logout: () => request<{ ok: true }>('/auth/logout', { method: 'POST' }),
 };
+
 
 
