@@ -225,6 +225,34 @@ describe('DELETE /api/trips/:publicId/subtrips/:subTripId', () => {
     const res = await request(app).delete(`/api/trips/${publicId}/subtrips/not-a-number`).set('X-Member-Id', String(creatorMemberId));
     expect(res.status).toBe(404);
   });
+
+  it('allows deleting a per_item sub trip, cleaning up its subTripItems rows too', async () => {
+    const { cookie } = await createAuthedUser('delete-peritem@example.com');
+    const createTripRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip', destination: 'Test', startDate: '2026-01-01', endDate: '2026-01-02', members: ['Budi', 'Aji'],
+    });
+    const { publicId } = createTripRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, createdByMemberId: budi.id,
+      splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+      items: [{ name: 'Item A', price: 20000, participants: [{ memberId: aji.id }] }],
+    });
+    const subTripId = createRes.body.id;
+
+    const res = await request(app)
+      .delete(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(budi.id));
+    expect(res.status).toBe(200);
+
+    const remainingItems = await db.select().from(subTripItems).where(eq(subTripItems.subTripId, subTripId));
+    expect(remainingItems).toHaveLength(0);
+  });
 });
 
 describe('PATCH /api/trips/:publicId/subtrips/:subTripId — per-item mode', () => {

@@ -418,6 +418,12 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
   }
 
   await db.transaction(async (tx) => {
+    const itemRows = await tx.select().from(subTripItems).where(eq(subTripItems.subTripId, existing.id));
+    const itemIds = itemRows.map((i) => i.id);
+    if (itemIds.length > 0) {
+      await tx.delete(subTripItemParticipants).where(inArray(subTripItemParticipants.itemId, itemIds));
+      await tx.delete(subTripItems).where(eq(subTripItems.subTripId, existing.id));
+    }
     await tx.delete(debts).where(eq(debts.subTripId, existing.id));
     await tx.delete(subTrips).where(eq(subTrips.id, existing.id));
   });
