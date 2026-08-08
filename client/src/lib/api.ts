@@ -55,6 +55,33 @@ export interface DebtItem {
   settled: boolean;
 }
 
+export type SplitMode = 'total' | 'per_item';
+
+export interface ItemParticipantInput {
+  memberId: number;
+  billedToMemberId?: number;
+}
+
+export interface ItemInput {
+  name: string;
+  price: number;
+  participants: ItemParticipantInput[];
+}
+
+export interface ItemParticipantDetail {
+  memberId: number;
+  name: string;
+  billedToMemberId: number | null;
+  billedToName: string | null;
+}
+
+export interface SubTripItemDetail {
+  id: number;
+  name: string;
+  price: number;
+  participants: ItemParticipantDetail[];
+}
+
 export interface SubTripDetail {
   id: number;
   name: string;
@@ -65,18 +92,38 @@ export interface SubTripDetail {
   amount: number;
   payerParticipates: boolean;
   createdByMemberId: number;
+  splitMode: SplitMode;
+  taxPercent: number;
+  servicePercent: number;
+  items: SubTripItemDetail[];
   debts: DebtItem[];
 }
 
-export interface SubTripInput {
+export interface TotalModeInput {
   name: string;
   category: SubTripCategory;
   date: string;
   payerMemberId: number;
+  createdByMemberId: number;
+  splitMode: 'total';
   amount: number;
   participantMemberIds: number[];
-  createdByMemberId: number;
 }
+
+export interface PerItemModeInput {
+  name: string;
+  category: SubTripCategory;
+  date: string;
+  payerMemberId: number;
+  createdByMemberId: number;
+  splitMode: 'per_item';
+  taxPercent: number;
+  servicePercent: number;
+  items: ItemInput[];
+}
+
+export type SubTripInput = TotalModeInput | PerItemModeInput;
+
 
 export interface CurrentUser {
   id: number;

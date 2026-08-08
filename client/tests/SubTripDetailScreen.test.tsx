@@ -38,6 +38,10 @@ const subTripDetail = {
   amount: 60000,
   payerParticipates: true,
   createdByMemberId: 1,
+  splitMode: 'total' as const,
+  taxPercent: 0,
+  servicePercent: 0,
+  items: [],
   debts: [{ id: 10, memberId: 2, name: 'Aji', amount: 30000, settled: false }],
 };
 

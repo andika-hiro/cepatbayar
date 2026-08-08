@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, type SubTripCategory, type SubTripDetail } from '../lib/api';
+import { api, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
 import { CATEGORIES } from '../lib/categories';
 
 interface AddEditSubTripSheetProps {
@@ -57,14 +57,15 @@ export default function AddEditSubTripSheet({
     setSubmitting(true);
     setError(null);
     try {
-      const input = {
+      const input: SubTripInput = {
         name: name.trim(),
         category,
         date: initialData?.date ?? todayIso(),
         payerMemberId,
+        createdByMemberId: initialData?.createdByMemberId ?? currentMemberId,
+        splitMode: 'total',
         amount,
         participantMemberIds: [...checkedIds],
-        createdByMemberId: initialData?.createdByMemberId ?? currentMemberId,
       };
       if (mode === 'create') {
         await api.createSubTrip(publicId, input);
