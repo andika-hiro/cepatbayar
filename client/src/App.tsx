@@ -3,6 +3,7 @@ import TripListScreen from './screens/TripListScreen';
 import NewTripScreen from './screens/NewTripScreen';
 import IdentityPickerScreen from './screens/IdentityPickerScreen';
 import RingkasanScreen from './screens/RingkasanScreen';
+import RiwayatScreen from './screens/RiwayatScreen';
 import ProfilePlaceholderScreen from './screens/ProfilePlaceholderScreen';
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
       <Route path="/trip/new" element={<NewTripScreen />} />
       <Route path="/t/:publicId" element={<IdentityPickerScreen />} />
       <Route path="/t/:publicId/ringkasan" element={<RingkasanScreen />} />
+      <Route path="/t/:publicId/riwayat" element={<RiwayatScreen />} />
       <Route path="/profil" element={<ProfilePlaceholderScreen />} />
     </Routes>
   );

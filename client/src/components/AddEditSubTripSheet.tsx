@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api, type SubTripCategory, type SubTripDetail } from '../lib/api';
+import { CATEGORIES } from '../lib/categories';
 
 interface AddEditSubTripSheetProps {
   publicId: string;
@@ -10,14 +11,6 @@ interface AddEditSubTripSheetProps {
   onClose: () => void;
   onSaved: () => void;
 }
-
-const CATEGORIES: { value: SubTripCategory; label: string }[] = [
-  { value: 'makan', label: 'Makan' },
-  { value: 'transport', label: 'Transport' },
-  { value: 'nginap', label: 'Nginap' },
-  { value: 'tiket_wisata', label: 'Tiket wisata' },
-  { value: 'lainnya', label: 'Lainnya' },
-];
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
