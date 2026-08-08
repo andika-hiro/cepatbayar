@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
+import { api, type SplitMode, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
 import { CATEGORIES } from '../lib/categories';
 
 interface AddEditSubTripSheetProps {
@@ -39,11 +39,15 @@ export default function AddEditSubTripSheet({
   const [payerOpen, setPayerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [splitMode, setSplitMode] = useState<SplitMode>(initialData?.splitMode ?? 'total');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const payerName = members.find((m) => m.id === payerMemberId)?.name ?? '';
 
   const amount = Number.parseInt(amountText, 10);
-  const canSubmit = Boolean(name.trim() && category && Number.isFinite(amount) && amount > 0 && checkedIds.size > 0);
+  const totalModeValid = Number.isFinite(amount) && amount > 0 && checkedIds.size > 0;
+  // Per-item validity is wired in a later task; until then this mode can't be submitted.
+  const canSubmit = Boolean(name.trim() && category && (splitMode === 'total' ? totalModeValid : false));
 
   function toggleMember(id: number) {
     const next = new Set(checkedIds);
@@ -120,19 +124,63 @@ export default function AddEditSubTripSheet({
           </div>
         </div>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="font-inter text-xs font-semibold text-sub">Nominal</span>
-          <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
-            <span className="font-mono text-sm text-sub">Rp</span>
-            <input
-              value={amountText}
-              onChange={(e) => setAmountText(e.target.value.replace(/[^0-9]/g, ''))}
-              inputMode="numeric"
-              placeholder="0"
-              className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
-            />
-          </div>
-        </label>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((o) => !o)}
+            className="flex items-center justify-between font-inter text-xs font-semibold text-sub"
+          >
+            <span>Opsi lanjutan</span>
+            <span>{advancedOpen ? '▴' : '▾'}</span>
+          </button>
+          {advancedOpen && (
+            <div className="flex flex-col gap-1.5 rounded-input border border-border bg-surface p-3.5">
+              <span className="font-inter text-xs font-semibold text-sub">Cara bagi</span>
+              {mode === 'create' ? (
+                <div className="flex overflow-hidden rounded-pill border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setSplitMode('total')}
+                    className={`flex-1 px-3.5 py-2 font-inter text-[12.5px] font-medium ${
+                      splitMode === 'total' ? 'bg-accent text-onAccent' : 'bg-surface text-text'
+                    }`}
+                  >
+                    Jumlah total
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSplitMode('per_item')}
+                    className={`flex-1 px-3.5 py-2 font-inter text-[12.5px] font-medium ${
+                      splitMode === 'per_item' ? 'bg-accent text-onAccent' : 'bg-surface text-text'
+                    }`}
+                  >
+                    Rincian per item
+                  </button>
+                </div>
+              ) : (
+                <div className="rounded-pill border border-border bg-surfaceAlt px-3.5 py-2 font-inter text-[12.5px] font-medium text-sub">
+                  {splitMode === 'total' ? 'Jumlah total' : 'Rincian per item'} (tidak bisa diubah saat edit)
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {splitMode === 'total' && (
+          <label className="flex flex-col gap-1.5">
+            <span className="font-inter text-xs font-semibold text-sub">Nominal</span>
+            <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
+              <span className="font-mono text-sm text-sub">Rp</span>
+              <input
+                value={amountText}
+                onChange={(e) => setAmountText(e.target.value.replace(/[^0-9]/g, ''))}
+                inputMode="numeric"
+                placeholder="0"
+                className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
+              />
+            </div>
+          </label>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="font-inter text-xs font-semibold text-sub">Dibayar oleh</span>
@@ -167,29 +215,31 @@ export default function AddEditSubTripSheet({
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="font-inter text-xs font-semibold text-sub">
-              Dibagi ke ({checkedIds.size}/{members.length})
-            </span>
-            <div className="flex gap-3">
-              <button onClick={() => setCheckedIds(new Set(members.map((m) => m.id)))} className="font-inter text-xs font-semibold text-accent">
-                Pilih semua
-              </button>
-              <button onClick={() => setCheckedIds(new Set())} className="font-inter text-xs font-semibold text-accent">
-                Kosongkan
-              </button>
+        {splitMode === 'total' && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="font-inter text-xs font-semibold text-sub">
+                Dibagi ke ({checkedIds.size}/{members.length})
+              </span>
+              <div className="flex gap-3">
+                <button onClick={() => setCheckedIds(new Set(members.map((m) => m.id)))} className="font-inter text-xs font-semibold text-accent">
+                  Pilih semua
+                </button>
+                <button onClick={() => setCheckedIds(new Set())} className="font-inter text-xs font-semibold text-accent">
+                  Kosongkan
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              {members.map((m) => (
+                <label key={m.id} className="flex items-center gap-2.5 rounded-input border border-border bg-surface px-3.5 py-2.5">
+                  <input type="checkbox" checked={checkedIds.has(m.id)} onChange={() => toggleMember(m.id)} />
+                  <span className="font-inter text-sm text-text">{m.name}</span>
+                </label>
+              ))}
             </div>
           </div>
-          <div className="flex flex-col gap-2">
-            {members.map((m) => (
-              <label key={m.id} className="flex items-center gap-2.5 rounded-input border border-border bg-surface px-3.5 py-2.5">
-                <input type="checkbox" checked={checkedIds.has(m.id)} onChange={() => toggleMember(m.id)} />
-                <span className="font-inter text-sm text-text">{m.name}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        )}
 
         {error && <div className="font-inter text-[12.5px] text-neg">{error}</div>}
       </div>

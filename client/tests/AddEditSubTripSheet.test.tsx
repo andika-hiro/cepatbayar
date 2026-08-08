@@ -173,3 +173,39 @@ describe('AddEditSubTripSheet — edit mode', () => {
     );
   });
 });
+
+describe('AddEditSubTripSheet — split mode toggle', () => {
+  it('Opsi lanjutan is collapsed by default and opens on click', async () => {
+    render(<AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="create" onClose={() => {}} onSaved={() => {}} />);
+    expect(screen.queryByText('Jumlah total')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByText('Opsi lanjutan'));
+    expect(screen.getByText('Jumlah total')).toBeInTheDocument();
+  });
+
+  it('switching to Rincian per item hides Nominal and Dibagi ke, and disables submit', async () => {
+    render(<AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="create" onClose={() => {}} onSaved={() => {}} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('misal: Makan siang di Resto A'), 'Makan');
+    await user.click(screen.getByText('Makan', { selector: 'button' }));
+    await user.click(screen.getByText('Opsi lanjutan'));
+    await user.click(screen.getByText('Rincian per item'));
+    expect(screen.queryByPlaceholderText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Dibagi ke/)).not.toBeInTheDocument();
+    expect(screen.getByText('Simpan pengeluaran')).toBeDisabled();
+  });
+
+  it('mode is a non-interactive indicator in edit mode', async () => {
+    const initialData = {
+      id: 5, name: 'Makan Malam', category: 'makan' as const, date: '2026-01-01',
+      payerMemberId: 1, payerName: 'Budi', amount: 60000, payerParticipates: true, createdByMemberId: 1,
+      splitMode: 'per_item' as const, taxPercent: 10, servicePercent: 0, items: [], debts: [],
+    };
+    render(
+      <AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="edit" initialData={initialData} onClose={() => {}} onSaved={() => {}} />,
+    );
+    await userEvent.setup().click(screen.getByText('Opsi lanjutan'));
+    expect(screen.getByText(/tidak bisa diubah saat edit/)).toBeInTheDocument();
+    expect(screen.queryByText('Jumlah total', { selector: 'button' })).not.toBeInTheDocument();
+  });
+});
+
