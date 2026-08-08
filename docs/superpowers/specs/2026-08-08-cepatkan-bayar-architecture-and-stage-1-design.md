@@ -105,3 +105,9 @@ Alur submit: isi form → `POST /api/trips` → redirect ke `/t/:publicId` (Pili
 - Kelola anggota & rekening (nambah anggota setelah trip dibuat, akun/e-wallet) — anggota awal cuma bisa diisi pas Buat Trip Baru untuk sekarang.
 - Ringkasan, Riwayat, Saldo, Profil/Pengaturan asli — masih placeholder.
 - PWA manifest/service worker — ditunda ke Tahap 4 sesuai urutan yang diminta.
+
+## 9. Keputusan pasca-Tahap 1 (dari final review)
+
+**Member ID tetap auto-increment int global** (bukan diganti ke random/scoped-per-trip). Final review Tahap 1 menandai ini sebagai hal yang perlu diputuskan sebelum Tahap 2 mulai mengirim identitas anggota ke server buat atribusi pengeluaran (debt), karena ID yang berurutan & global gampang ditebak.
+
+Keputusan: **tetap pakai int biasa**, dengan syarat yang wajib dipegang di Tahap 2 dan seterusnya — **setiap endpoint yang menerima `memberId` wajib divalidasi bahwa member itu benar milik `tripId` yang sama** (never trust `memberId` sendirian tanpa scoping ke trip). Alasan: model keamanan aplikasi ini dari awal memang "unguessable trip link = kontrol akses" (lihat §3.3), bukan "unguessable resource ID" di tiap level — begitu satu trip diakses, semua datanya memang sengaja terbuka buat semua anggota (§4 PRD: privasi terbuka di dalam trip). Random ID di level member cuma nambah kerumitan tanpa nambah proteksi nyata, selama validasi scoping-nya konsisten. Ini prinsip desain buat dibawa ke brainstorming Tahap 2, bukan perubahan skema sekarang.
