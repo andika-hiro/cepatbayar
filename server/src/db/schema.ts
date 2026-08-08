@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, timestamp, date } from 'drizzle-orm/mysql-core';
+import { mysqlTable, int, varchar, timestamp, date, mysqlEnum, boolean } from 'drizzle-orm/mysql-core';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -31,5 +31,29 @@ export const tripMembers = mysqlTable('trip_members', {
   id: int('id').autoincrement().primaryKey(),
   tripId: int('trip_id').notNull().references(() => trips.id),
   name: varchar('name', { length: 255 }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const subTrips = mysqlTable('sub_trips', {
+  id: int('id').autoincrement().primaryKey(),
+  tripId: int('trip_id').notNull().references(() => trips.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  category: mysqlEnum('category', ['makan', 'transport', 'nginap', 'tiket_wisata', 'lainnya']).notNull(),
+  date: date('date', { mode: 'string' }).notNull(),
+  payerMemberId: int('payer_member_id').notNull().references(() => tripMembers.id),
+  amount: int('amount').notNull(),
+  createdByMemberId: int('created_by_member_id').notNull().references(() => tripMembers.id),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedByMemberId: int('updated_by_member_id'),
+  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
+});
+
+export const debts = mysqlTable('debts', {
+  id: int('id').autoincrement().primaryKey(),
+  subTripId: int('sub_trip_id').notNull().references(() => subTrips.id),
+  memberId: int('member_id').notNull().references(() => tripMembers.id),
+  amount: int('amount').notNull(),
+  settled: boolean('settled').notNull().default(false),
+  settledAt: timestamp('settled_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
