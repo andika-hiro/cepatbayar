@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type SubTripDetail as SubTripDetailType } from '../lib/api';
-import { getIdentity } from '../lib/localTrips';
+import { getCurrentMemberId } from '../lib/localTrips';
 import { formatRupiah } from '../lib/format';
 import { categoryLabel } from '../lib/categories';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
@@ -16,7 +16,7 @@ export default function SubTripDetailScreen() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentMemberId = publicId ? Number(getIdentity(publicId)) : null;
+  const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
   async function load() {
     if (!publicId || !subTripId) return;

@@ -23,6 +23,18 @@ export function getIdentity(tripPublicId: string): string | null {
   return localStorage.getItem(identityKey(tripPublicId));
 }
 
+// Null-safe alternative to `Number(getIdentity(tripPublicId))`: when no
+// identity has ever been picked for this trip on this device, getIdentity
+// returns null, and Number(null) is 0 — NOT null or NaN — which silently
+// defeats `=== null` guards downstream. This always returns a real positive
+// member id or null, never 0.
+export function getCurrentMemberId(tripPublicId: string): number | null {
+  const raw = getIdentity(tripPublicId);
+  if (raw === null) return null;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export function setIdentity(tripPublicId: string, memberId: string): void {
   localStorage.setItem(identityKey(tripPublicId), memberId);
   addJoinedTripId(tripPublicId);

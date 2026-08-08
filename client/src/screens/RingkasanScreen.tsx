@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type SubTripListItem, type TripDetail, type TripSummaryDetail } from '../lib/api';
-import { getIdentity } from '../lib/localTrips';
+import { getCurrentMemberId } from '../lib/localTrips';
 import { formatDateRange, formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
@@ -15,7 +15,7 @@ export default function RingkasanScreen() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const currentMemberId = publicId ? Number(getIdentity(publicId)) : null;
+  const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
   async function load() {
     if (!publicId) return;
