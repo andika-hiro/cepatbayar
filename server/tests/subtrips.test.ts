@@ -160,3 +160,96 @@ describe('GET /api/trips/:publicId/subtrips/:subTripId', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('end-to-end: create → summary → settle → summary → edit', () => {
+  it('drives the full API chain (not direct DB inserts) and keeps the summary rollup consistent at every step', async () => {
+    const { publicId, members } = await createTestTrip('e2e-chain@example.com', ['Budi', 'Aji']);
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    // 1. Create a sub trip with a real split via the actual endpoint.
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+    });
+    expect(createRes.status).toBe(201);
+    const subTripId = createRes.body.id;
+
+    // 2. Summary should reflect the debt before it's settled.
+    let summaryRes = await request(app).get(`/api/trips/${publicId}/summary`);
+    let budiSummary = summaryRes.body.members.find((m: { memberId: number }) => m.memberId === budi.id);
+    let ajiSummary = summaryRes.body.members.find((m: { memberId: number }) => m.memberId === aji.id);
+    expect(budiSummary.rollup).toBe(20000);
+    expect(budiSummary.status).toBe('dilunasin');
+    expect(ajiSummary.rollup).toBe(-20000);
+    expect(ajiSummary.status).toBe('ngutang');
+
+    // 3. Settle the debt via the real toggle endpoint.
+    const detailRes = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
+    const debtId = detailRes.body.debts[0].id;
+    const settleRes = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}/debts/${debtId}`)
+      .send({ settled: true });
+    expect(settleRes.status).toBe(200);
+
+    // 4. Summary should now exclude the settled debt entirely — both members back to 0/lunas.
+    summaryRes = await request(app).get(`/api/trips/${publicId}/summary`);
+    budiSummary = summaryRes.body.members.find((m: { memberId: number }) => m.memberId === budi.id);
+    ajiSummary = summaryRes.body.members.find((m: { memberId: number }) => m.memberId === aji.id);
+    expect(budiSummary.rollup).toBe(0);
+    expect(budiSummary.status).toBe('lunas');
+    expect(ajiSummary.rollup).toBe(0);
+    expect(ajiSummary.status).toBe('lunas');
+
+    // 5. Edit the sub trip's amount (same participants) via the real PATCH endpoint.
+    const patchRes = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(budi.id))
+      .send({
+        name: 'Makan', category: 'makan', date: '2026-01-01',
+        payerMemberId: budi.id, amount: 80000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+      });
+    expect(patchRes.status).toBe(200);
+
+    // 6. The debt's settled status must survive the amount change, but the amount is recomputed.
+    const afterEditDetail = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
+    expect(afterEditDetail.body.debts[0].settled).toBe(true);
+    expect(afterEditDetail.body.debts[0].amount).toBe(40000);
+
+    // 7. A fresh summary must still exclude it (still settled), regardless of the new amount.
+    summaryRes = await request(app).get(`/api/trips/${publicId}/summary`);
+    budiSummary = summaryRes.body.members.find((m: { memberId: number }) => m.memberId === budi.id);
+    expect(budiSummary.rollup).toBe(0);
+    expect(budiSummary.status).toBe('lunas');
+  });
+});
+
+describe('createdByMemberId immutability', () => {
+  it('ignores a PATCH body that tries to reassign createdByMemberId to a different member', async () => {
+    const { publicId, members } = await createTestTrip('immutable-creator@example.com', ['Budi', 'Aji']);
+    const budi = members.find((m) => m.name === 'Budi')!; // X — the real original adder
+    const aji = members.find((m) => m.name === 'Aji')!; // Y — a different, otherwise-valid member
+
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: budi.id,
+    });
+    expect(createRes.status).toBe(201);
+    const subTripId = createRes.body.id;
+
+    // Authorized editor (the real original adder, Budi/X) sends a body
+    // claiming createdByMemberId should become Aji/Y.
+    const patchRes = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(budi.id))
+      .send({
+        name: 'Makan Malam', category: 'makan', date: '2026-01-01',
+        payerMemberId: budi.id, amount: 40000, participantMemberIds: [budi.id, aji.id], createdByMemberId: aji.id,
+      });
+    expect(patchRes.status).toBe(200);
+
+    const detailRes = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
+    expect(detailRes.body.createdByMemberId).toBe(budi.id);
+    expect(detailRes.body.createdByMemberId).not.toBe(aji.id);
+  });
+});
