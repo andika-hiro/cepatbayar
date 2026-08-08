@@ -1,6 +1,7 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
+import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { db } from '../db/client';
 import { debts, subTrips, tripMembers } from '../db/schema';
 import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
@@ -22,14 +23,58 @@ export const subTripInputSchema = z.object({
   createdByMemberId: z.number().int().positive(),
 });
 
-async function canModifySubTrip(req: import('express').Request, trip: NonNullable<Awaited<ReturnType<typeof getTripByPublicId>>>, createdByMemberId: number): Promise<boolean> {
+// Exported so tests can reset the counter between cases — the store is a
+// module-level singleton keyed by client IP, and every supertest request in
+// a test run shares an IP, so without a reset the many legitimate
+// POST /subtrips calls made across a test file would trip the limiter. This
+// is a more generous limit than the auth request-link limiter since adding
+// expenses is a frequently-used, legitimate feature rather than a rarely-used
+// login action.
+export const createSubTripLimiterStore = new MemoryStore();
+
+const createSubTripLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: createSubTripLimiterStore,
+});
+
+async function canModifySubTrip(req: Request, trip: NonNullable<Awaited<ReturnType<typeof getTripByPublicId>>>, createdByMemberId: number): Promise<boolean> {
   const isCreatorUser = req.userId !== undefined && req.userId === trip.creatorUserId;
   const claimedMemberIdHeader = req.header('X-Member-Id');
   const isOriginalAdder = claimedMemberIdHeader !== undefined && Number(claimedMemberIdHeader) === createdByMemberId;
   return isCreatorUser || isOriginalAdder;
 }
 
-router.post<{ publicId: string }>('/', async (req, res) => {
+// Shared preamble for every route scoped to a single sub trip
+// (:publicId/:subTripId): looks up the trip, safely parses subTripId (never
+// letting a non-numeric segment reach the DB as NaN), and loads the sub trip
+// scoped to that trip. Writes a 404 and returns null on any failure so
+// callers can just do `if (!loaded) return;`.
+async function loadScopedSubTrip(
+  req: Request,
+  res: Response,
+): Promise<{ trip: NonNullable<Awaited<ReturnType<typeof getTripByPublicId>>>; subTrip: typeof subTrips.$inferSelect } | null> {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return null;
+  }
+  const subTripId = Number(req.params.subTripId);
+  if (!Number.isInteger(subTripId) || subTripId <= 0) {
+    res.status(404).json({ error: 'not_found' });
+    return null;
+  }
+  const [subTrip] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
+  if (!subTrip) {
+    res.status(404).json({ error: 'not_found' });
+    return null;
+  }
+  return { trip, subTrip };
+}
+
+router.post<{ publicId: string }>('/', createSubTripLimiter, async (req, res) => {
   const trip = await getTripByPublicId(req.params.publicId);
   if (!trip) {
     res.status(404).json({ error: 'not_found' });
@@ -51,10 +96,11 @@ router.post<{ publicId: string }>('/', async (req, res) => {
   }
 
   const shares = computeEqualShares(amount, participantMemberIds, payerMemberId);
+  const payerParticipates = participantMemberIds.includes(payerMemberId);
 
   const subTripId = await db.transaction(async (tx) => {
     const [result] = await tx.insert(subTrips).values({
-      tripId: trip.id, name, category, date, payerMemberId, amount, createdByMemberId,
+      tripId: trip.id, name, category, date, payerMemberId, amount, payerParticipates, createdByMemberId,
     });
     const newSubTripId = result.insertId;
     if (shares.size > 0) {
@@ -112,20 +158,12 @@ router.get<{ publicId: string }>('/', async (req, res) => {
 });
 
 router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, res) => {
-  const trip = await getTripByPublicId(req.params.publicId);
-  if (!trip) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
-  const subTripId = Number(req.params.subTripId);
-  const [subTrip] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
-  if (!subTrip) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
+  const loaded = await loadScopedSubTrip(req, res);
+  if (!loaded) return;
+  const { subTrip } = loaded;
 
   const [payer] = await db.select().from(tripMembers).where(eq(tripMembers.id, subTrip.payerMemberId));
-  const debtRows = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+  const debtRows = await db.select().from(debts).where(eq(debts.subTripId, subTrip.id));
   const debtMemberIds = [...new Set(debtRows.map((d) => d.memberId))];
   const debtMembers = debtMemberIds.length
     ? await db.select().from(tripMembers).where(inArray(tripMembers.id, debtMemberIds))
@@ -140,23 +178,17 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     payerMemberId: subTrip.payerMemberId,
     payerName: payer?.name ?? '',
     amount: subTrip.amount,
+    payerParticipates: subTrip.payerParticipates,
     createdByMemberId: subTrip.createdByMemberId,
     debts: debtRows.map((d) => ({ id: d.id, memberId: d.memberId, name: nameById.get(d.memberId) ?? '', amount: d.amount, settled: d.settled })),
   });
 });
 
 router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserIfPresent, async (req, res) => {
-  const trip = await getTripByPublicId(req.params.publicId);
-  if (!trip) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
-  const subTripId = Number(req.params.subTripId);
-  const [existing] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
-  if (!existing) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
+  const loaded = await loadScopedSubTrip(req, res);
+  if (!loaded) return;
+  const { trip, subTrip: existing } = loaded;
+  const subTripId = existing.id;
 
   const authorized = await canModifySubTrip(req, trip, existing.createdByMemberId);
   if (!authorized) {
@@ -170,7 +202,10 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
     return;
   }
   const { name, category, date, payerMemberId, amount, participantMemberIds, createdByMemberId } = parsed.data;
-
+  // Note: createdByMemberId from the request body is validated above (it must
+  // belong to the trip) but is intentionally never written in the
+  // `tx.update(subTrips).set(...)` below — the original creator is immutable
+  // once set, regardless of what a PATCH body claims.
   const allIds = [...new Set([payerMemberId, createdByMemberId, ...participantMemberIds])];
   const valid = await memberIdsBelongToTrip(trip.id, allIds);
   if (!valid) {
@@ -179,6 +214,7 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
   }
 
   const shares = computeEqualShares(amount, participantMemberIds, payerMemberId);
+  const payerParticipates = participantMemberIds.includes(payerMemberId);
   const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
   const reconciled = reconcileDebts(
     existingDebtRows.map((d) => ({ id: d.id, memberId: d.memberId, settled: d.settled })),
@@ -196,6 +232,7 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
         date,
         payerMemberId,
         amount,
+        payerParticipates,
         updatedByMemberId: claimedMemberIdHeader ? Number(claimedMemberIdHeader) : existing.createdByMemberId,
       })
       .where(eq(subTrips.id, subTripId));
@@ -215,17 +252,9 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
 });
 
 router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUserIfPresent, async (req, res) => {
-  const trip = await getTripByPublicId(req.params.publicId);
-  if (!trip) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
-  const subTripId = Number(req.params.subTripId);
-  const [existing] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
-  if (!existing) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
+  const loaded = await loadScopedSubTrip(req, res);
+  if (!loaded) return;
+  const { trip, subTrip: existing } = loaded;
 
   const authorized = await canModifySubTrip(req, trip, existing.createdByMemberId);
   if (!authorized) {
@@ -234,8 +263,8 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
   }
 
   await db.transaction(async (tx) => {
-    await tx.delete(debts).where(eq(debts.subTripId, subTripId));
-    await tx.delete(subTrips).where(eq(subTrips.id, subTripId));
+    await tx.delete(debts).where(eq(debts.subTripId, existing.id));
+    await tx.delete(subTrips).where(eq(subTrips.id, existing.id));
   });
 
   res.status(200).json({ ok: true });
@@ -244,25 +273,22 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
 const toggleDebtSchema = z.object({ settled: z.boolean() });
 
 router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTripId/debts/:debtId', async (req, res) => {
-  const trip = await getTripByPublicId(req.params.publicId);
-  if (!trip) {
-    res.status(404).json({ error: 'not_found' });
-    return;
-  }
+  const loaded = await loadScopedSubTrip(req, res);
+  if (!loaded) return;
+  const { subTrip } = loaded;
+
   const parsed = toggleDebtSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_body' });
     return;
   }
 
-  const subTripId = Number(req.params.subTripId);
   const debtId = Number(req.params.debtId);
-  const [subTrip] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
-  if (!subTrip) {
+  if (!Number.isInteger(debtId) || debtId <= 0) {
     res.status(404).json({ error: 'not_found' });
     return;
   }
-  const [debt] = await db.select().from(debts).where(and(eq(debts.id, debtId), eq(debts.subTripId, subTripId)));
+  const [debt] = await db.select().from(debts).where(and(eq(debts.id, debtId), eq(debts.subTripId, subTrip.id)));
   if (!debt) {
     res.status(404).json({ error: 'not_found' });
     return;

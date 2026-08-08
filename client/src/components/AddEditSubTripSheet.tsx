@@ -32,7 +32,7 @@ export default function AddEditSubTripSheet({
   const [checkedIds, setCheckedIds] = useState<Set<number>>(
     new Set(
       initialData
-        ? [...initialData.debts.map((d) => d.memberId), initialData.payerMemberId]
+        ? [...initialData.debts.map((d) => d.memberId), ...(initialData.payerParticipates ? [initialData.payerMemberId] : [])]
         : members.map((m) => m.id),
     ),
   );

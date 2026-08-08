@@ -63,6 +63,7 @@ export interface SubTripDetail {
   payerMemberId: number;
   payerName: string;
   amount: number;
+  payerParticipates: boolean;
   createdByMemberId: number;
   debts: DebtItem[];
 }

@@ -114,6 +114,75 @@ describe('PATCH /api/trips/:publicId/subtrips/:subTripId', () => {
       });
     expect(res.status).toBe(404);
   });
+
+  it('returns 404 for a non-numeric subTripId in the URL, instead of a 500 from NaN reaching the DB', async () => {
+    const { publicId, creatorMemberId } = await createTestTripWithSubTrip('edit-nan@example.com', ['Budi']);
+    const res = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/not-a-number`)
+      .set('X-Member-Id', String(creatorMemberId))
+      .send({
+        name: 'X', category: 'makan', date: '2026-01-01',
+        payerMemberId: creatorMemberId, amount: 1000, participantMemberIds: [creatorMemberId], createdByMemberId: creatorMemberId,
+      });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('payer participation (payerParticipates) round trip', () => {
+  it('records payerParticipates: false when the payer pays for others only, and a same-participant PATCH leaves debt amounts unchanged', async () => {
+    const { cookie } = await createAuthedUser('payer-not-participant@example.com');
+    const createRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Test Trip', destination: 'Test', startDate: '2026-01-01', endDate: '2026-01-02',
+      members: ['Budi', 'Aji', 'Citra'],
+    });
+    const { publicId } = createRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+    const citra = members.find((m) => m.name === 'Citra')!;
+
+    // Budi pays for Aji and Citra's tickets without joining them.
+    const subTripRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Tiket Wisata', category: 'tiket_wisata', date: '2026-01-01',
+      payerMemberId: budi.id, amount: 100000,
+      participantMemberIds: [aji.id, citra.id],
+      createdByMemberId: budi.id,
+    });
+    expect(subTripRes.status).toBe(201);
+    const subTripId = subTripRes.body.id;
+
+    const detailRes = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
+    expect(detailRes.body.payerParticipates).toBe(false);
+    // divisor is 2 (Aji, Citra), NOT 3 — Budi never joined.
+    expect(detailRes.body.debts).toHaveLength(2);
+    expect(detailRes.body.debts.every((d: { amount: number }) => d.amount === 50000)).toBe(true);
+
+    // Regression check: PATCHing with the EXACT same (payer-excluded)
+    // participant list must not silently change the divisor to 3.
+    const patchRes = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(budi.id))
+      .send({
+        name: 'Tiket Wisata (typo fix)', category: 'tiket_wisata', date: '2026-01-01',
+        payerMemberId: budi.id, amount: 100000,
+        participantMemberIds: [aji.id, citra.id],
+        createdByMemberId: budi.id,
+      });
+    expect(patchRes.status).toBe(200);
+
+    const afterPatch = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
+    expect(afterPatch.body.payerParticipates).toBe(false);
+    expect(afterPatch.body.debts).toHaveLength(2);
+    expect(afterPatch.body.debts.every((d: { amount: number }) => d.amount === 50000)).toBe(true);
+  });
+
+  it('records payerParticipates: true when the payer is included among the participants', async () => {
+    const { publicId, subTripId } = await createTestTripWithSubTrip('payer-is-participant@example.com', ['Budi', 'Aji']);
+    const res = await request(app).get(`/api/trips/${publicId}/subtrips/${subTripId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.payerParticipates).toBe(true);
+  });
 });
 
 describe('DELETE /api/trips/:publicId/subtrips/:subTripId', () => {
@@ -139,5 +208,11 @@ describe('DELETE /api/trips/:publicId/subtrips/:subTripId', () => {
     const otherMemberId = members.find((m) => m.name === 'Aji')!.id;
     const res = await request(app).delete(`/api/trips/${publicId}/subtrips/${subTripId}`).set('X-Member-Id', String(otherMemberId));
     expect(res.status).toBe(403);
+  });
+
+  it('returns 404 (not a 500) for a non-numeric subTripId in the URL', async () => {
+    const { publicId, creatorMemberId } = await createTestTripWithSubTrip('delete-nan@example.com', ['Budi']);
+    const res = await request(app).delete(`/api/trips/${publicId}/subtrips/not-a-number`).set('X-Member-Id', String(creatorMemberId));
+    expect(res.status).toBe(404);
   });
 });

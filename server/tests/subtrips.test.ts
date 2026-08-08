@@ -153,4 +153,10 @@ describe('GET /api/trips/:publicId/subtrips/:subTripId', () => {
     const res = await request(app).get(`/api/trips/${publicId}/subtrips/999999`);
     expect(res.status).toBe(404);
   });
+
+  it('returns 404 (not a 500) for a non-numeric subTripId in the URL', async () => {
+    const { publicId } = await createTestTrip('subtrip-detail4@example.com', ['Budi']);
+    const res = await request(app).get(`/api/trips/${publicId}/subtrips/foo`);
+    expect(res.status).toBe(404);
+  });
 });

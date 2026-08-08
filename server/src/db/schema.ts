@@ -42,6 +42,7 @@ export const subTrips = mysqlTable('sub_trips', {
   date: date('date', { mode: 'string' }).notNull(),
   payerMemberId: int('payer_member_id').notNull().references(() => tripMembers.id),
   amount: int('amount').notNull(),
+  payerParticipates: boolean('payer_participates').notNull().default(true),
   createdByMemberId: int('created_by_member_id').notNull().references(() => tripMembers.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedByMemberId: int('updated_by_member_id'),

@@ -68,4 +68,20 @@ describe('PATCH .../subtrips/:subTripId/debts/:debtId', () => {
       .send({ settled: 'yes' });
     expect(res.status).toBe(400);
   });
+
+  it('returns 404 (not a 500) for a non-numeric subTripId in the URL', async () => {
+    const { publicId, debtId } = await createTripWithDebt();
+    const res = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/not-a-number/debts/${debtId}`)
+      .send({ settled: true });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 (not a 500) for a non-numeric debtId in the URL', async () => {
+    const { publicId, subTripId } = await createTripWithDebt();
+    const res = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}/debts/not-a-number`)
+      .send({ settled: true });
+    expect(res.status).toBe(404);
+  });
 });

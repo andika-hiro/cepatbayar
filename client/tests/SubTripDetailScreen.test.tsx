@@ -36,6 +36,7 @@ const subTripDetail = {
   payerMemberId: 1,
   payerName: 'Budi',
   amount: 60000,
+  payerParticipates: true,
   createdByMemberId: 1,
   debts: [{ id: 10, memberId: 2, name: 'Aji', amount: 30000, settled: false }],
 };

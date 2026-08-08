@@ -119,11 +119,12 @@ describe('AddEditSubTripSheet — edit mode', () => {
     payerMemberId: 1,
     payerName: 'Budi',
     amount: 60000,
+    payerParticipates: true,
     createdByMemberId: 1,
     debts: [{ id: 10, memberId: 2, name: 'Aji', amount: 30000, settled: false }],
   };
 
-  it('pre-fills fields from initialData, reconstructing participants from payer + debts', () => {
+  it('pre-fills fields from initialData, reconstructing participants from payer + debts when payerParticipates is true', () => {
     render(
       <AddEditSubTripSheet
         publicId="a1" members={members} currentMemberId={1} mode="edit" initialData={initialData}
@@ -132,7 +133,23 @@ describe('AddEditSubTripSheet — edit mode', () => {
     );
     expect(screen.getByDisplayValue('Makan Malam')).toBeInTheDocument();
     expect(screen.getByDisplayValue('60000')).toBeInTheDocument();
+    // payer (Budi, id 1) participated, so debts (Aji) + payer = 2 checked
     expect(screen.getByText('Dibagi ke (2/3)')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Budi' })).toBeChecked();
+  });
+
+  it('does not check the payer when payerParticipates is false, reflecting a payer who only paid for others', () => {
+    const initialDataPayerNotParticipating = { ...initialData, payerParticipates: false };
+    render(
+      <AddEditSubTripSheet
+        publicId="a1" members={members} currentMemberId={1} mode="edit" initialData={initialDataPayerNotParticipating}
+        onClose={() => {}} onSaved={() => {}}
+      />,
+    );
+    // payer (Budi, id 1) did NOT participate, so only debts (Aji) = 1 checked
+    expect(screen.getByText('Dibagi ke (1/3)')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Budi' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Aji' })).toBeChecked();
   });
 
   it('submits an update with the original createdByMemberId and unchanged date, using the editor as X-Member-Id', async () => {
