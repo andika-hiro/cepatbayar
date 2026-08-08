@@ -1,6 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api, type SplitMode, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
 import { CATEGORIES } from '../lib/categories';
+import ItemRow, { type ItemRowParticipant } from './ItemRow';
+
+interface DraftItem {
+  key: string;
+  name: string;
+  priceText: string;
+  participants: ItemRowParticipant[];
+}
 
 interface AddEditSubTripSheetProps {
   publicId: string;
@@ -36,6 +44,37 @@ export default function AddEditSubTripSheet({
         : members.map((m) => m.id),
     ),
   );
+  const [items, setItems] = useState<DraftItem[]>(() =>
+    initialData && initialData.items.length > 0
+      ? initialData.items.map((item) => ({
+          key: `item-${item.id}`,
+          name: item.name,
+          priceText: String(item.price),
+          participants: item.participants.map((p) => ({ memberId: p.memberId, billedToMemberId: p.billedToMemberId })),
+        }))
+      : [{ key: 'item-0', name: '', priceText: '', participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })) }],
+  );
+  const nextItemKeyRef = useRef(items.length);
+
+  function addItem() {
+    setItems((prev) => [
+      ...prev,
+      {
+        key: `item-${nextItemKeyRef.current++}`,
+        name: '',
+        priceText: '',
+        participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })),
+      },
+    ]);
+  }
+
+  function removeItem(key: string) {
+    setItems((prev) => prev.filter((i) => i.key !== key));
+  }
+
+  function updateItem(key: string, patch: Partial<DraftItem>) {
+    setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  }
   const [payerOpen, setPayerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +219,34 @@ export default function AddEditSubTripSheet({
               />
             </div>
           </label>
+        )}
+
+        {splitMode === 'per_item' && (
+          <div className="flex flex-col gap-2.5">
+            <span className="font-inter text-xs font-semibold text-sub">Item</span>
+            {items.map((item, idx) => (
+              <ItemRow
+                key={item.key}
+                index={idx}
+                name={item.name}
+                priceText={item.priceText}
+                participants={item.participants}
+                members={members}
+                canRemove={items.length > 1}
+                onNameChange={(value) => updateItem(item.key, { name: value })}
+                onPriceChange={(value) => updateItem(item.key, { priceText: value })}
+                onParticipantsChange={(value) => updateItem(item.key, { participants: value })}
+                onRemove={() => removeItem(item.key)}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={addItem}
+              className="rounded-input border border-dashed border-border px-3.5 py-2.5 font-inter text-[12.5px] font-semibold text-accent"
+            >
+              + Tambah item
+            </button>
+          </div>
         )}
 
         <div className="flex flex-col gap-1.5">

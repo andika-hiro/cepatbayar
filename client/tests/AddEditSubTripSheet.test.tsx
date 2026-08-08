@@ -189,7 +189,7 @@ describe('AddEditSubTripSheet — split mode toggle', () => {
     await user.click(screen.getByText('Makan', { selector: 'button' }));
     await user.click(screen.getByText('Opsi lanjutan'));
     await user.click(screen.getByText('Rincian per item'));
-    expect(screen.queryByPlaceholderText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText('Nominal')).not.toBeInTheDocument();
     expect(screen.queryByText(/Dibagi ke/)).not.toBeInTheDocument();
     expect(screen.getByText('Simpan pengeluaran')).toBeDisabled();
   });
@@ -208,4 +208,39 @@ describe('AddEditSubTripSheet — split mode toggle', () => {
     expect(screen.queryByText('Jumlah total', { selector: 'button' })).not.toBeInTheDocument();
   });
 });
+
+describe('AddEditSubTripSheet — item editor', () => {
+  async function openPerItemMode() {
+    render(<AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="create" onClose={() => {}} onSaved={() => {}} />);
+    const user = userEvent.setup();
+    await user.click(screen.getByText('Opsi lanjutan'));
+    await user.click(screen.getByText('Rincian per item'));
+    return user;
+  }
+
+  it('shows one empty item row by default, and + Tambah item adds another', async () => {
+    const user = await openPerItemMode();
+    expect(screen.getByText('Item 1')).toBeInTheDocument();
+    await user.click(screen.getByText('+ Tambah item'));
+    expect(screen.getByText('Item 2')).toBeInTheDocument();
+  });
+
+  it('reconstructs multiple items from initialData in edit mode', () => {
+    const initialData = {
+      id: 5, name: 'Makan', category: 'makan' as const, date: '2026-01-01',
+      payerMemberId: 1, payerName: 'Budi', amount: 50000, payerParticipates: true, createdByMemberId: 1,
+      splitMode: 'per_item' as const, taxPercent: 0, servicePercent: 0, debts: [],
+      items: [
+        { id: 1, name: 'Nasi', price: 20000, participants: [{ memberId: 1, name: 'Budi', billedToMemberId: null, billedToName: null }] },
+        { id: 2, name: 'Es Teh', price: 5000, participants: [{ memberId: 2, name: 'Aji', billedToMemberId: null, billedToName: null }] },
+      ],
+    };
+    render(
+      <AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="edit" initialData={initialData} onClose={() => {}} onSaved={() => {}} />,
+    );
+    expect(screen.getByDisplayValue('Nasi')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Es Teh')).toBeInTheDocument();
+  });
+});
+
 
