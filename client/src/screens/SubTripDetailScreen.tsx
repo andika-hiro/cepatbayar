@@ -96,6 +96,28 @@ export default function SubTripDetailScreen() {
         foto struk
       </div>
 
+      {subTrip.splitMode === 'per_item' && (
+        <div className="flex flex-col gap-2">
+          <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">Rincian item</div>
+          {subTrip.items.map((item) => (
+            <div key={item.id} className="flex flex-col gap-1.5 rounded-card border border-border bg-surface px-3.5 py-3">
+              <div className="flex items-center justify-between">
+                <span className="font-inter text-sm font-semibold text-text">{item.name}</span>
+                <span className="font-mono text-sm text-text">{formatRupiah(item.price)}</span>
+              </div>
+              <div className="flex flex-col gap-1">
+                {item.participants.map((p) => (
+                  <div key={p.memberId} className="font-inter text-[11px] text-sub">
+                    {p.name}
+                    {p.billedToName ? ` → ditagihkan ke ${p.billedToName}` : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">Tagihan per orang</div>
         {subTrip.debts.map((d) => (

@@ -162,3 +162,26 @@ describe('SubTripDetailScreen — error handling', () => {
     expect(await screen.findByText('Gagal muat detail sub trip. Coba refresh halaman.')).toBeInTheDocument();
   });
 });
+
+describe('SubTripDetailScreen — item breakdown', () => {
+  it('shows Rincian item for a per-item sub trip', async () => {
+    setIdentity('a1', '2');
+    vi.mocked(api.getSubTrip).mockResolvedValue({
+      ...subTripDetail,
+      splitMode: 'per_item',
+      taxPercent: 10,
+      servicePercent: 0,
+      items: [{ id: 1, name: 'Nasi Goreng', price: 20000, participants: [{ memberId: 2, name: 'Aji', billedToMemberId: null, billedToName: null }] }],
+    });
+    renderScreen();
+    expect(await screen.findByText('Rincian item')).toBeInTheDocument();
+    expect(screen.getByText('Nasi Goreng')).toBeInTheDocument();
+  });
+
+  it('hides Rincian item for a total-mode sub trip', async () => {
+    setIdentity('a1', '2');
+    renderScreen();
+    await screen.findByText('Makan Malam');
+    expect(screen.queryByText('Rincian item')).not.toBeInTheDocument();
+  });
+});
