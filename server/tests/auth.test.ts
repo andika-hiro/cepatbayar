@@ -1,10 +1,11 @@
 import crypto from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { db } from '../src/db/client';
 import { authTokens, users } from '../src/db/schema';
+import { requestLinkLimiterStore } from '../src/routes/auth';
 
 vi.mock('../src/mail', () => ({
   sendMagicLinkEmail: vi.fn().mockResolvedValue(undefined),
@@ -13,6 +14,15 @@ vi.mock('../src/mail', () => ({
 import { sendMagicLinkEmail } from '../src/mail';
 
 const app = createApp();
+
+// The request-link rate limiter is keyed by client IP and shared across every
+// test in this file (all supertest requests share an IP). Reset it before
+// each test so the legitimate request-link calls made throughout this suite
+// don't trip a limit that's dedicated to abuse — that behavior is covered on
+// its own in tests/rateLimit.test.ts, in a separate module instance.
+beforeEach(async () => {
+  await requestLinkLimiterStore.resetAll();
+});
 
 describe('POST /api/auth/request-link', () => {
   it('creates a user and sends a magic link email', async () => {
@@ -79,6 +89,17 @@ describe('GET /api/auth/verify', () => {
         process.env.CLIENT_URL = original;
       }
     }
+  });
+
+  it('rejects a backslash-prefixed redirect (protocol-relative bypass attempt) and falls back to /', async () => {
+    await request(app).post('/api/auth/request-link').send({ email: 'rina@example.com' });
+    const link = vi.mocked(sendMagicLinkEmail).mock.calls.at(-1)![1];
+    const token = new URL(link).searchParams.get('token')!;
+
+    const res = await request(app).get(`/api/auth/verify?token=${token}&redirect=${encodeURIComponent('/\\evil.com')}`);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).not.toContain('evil.com');
+    expect(res.headers.location).toBe('/');
   });
 
   it('rejects a token whose auth_tokens row has already expired (expiry enforcement)', async () => {

@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
+import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { and, eq, gt, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/client';
@@ -15,7 +16,21 @@ const requestLinkSchema = z.object({
   redirect: z.string().startsWith('/').optional(),
 });
 
-router.post('/request-link', async (req, res) => {
+// Exported so tests can reset the counter between cases — the store is a
+// module-level singleton keyed by client IP, and every supertest request in
+// a test run shares an IP, so without a reset the many legitimate
+// request-link calls made across the test suite would trip the limiter.
+export const requestLinkLimiterStore = new MemoryStore();
+
+const requestLinkLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  store: requestLinkLimiterStore,
+});
+
+router.post('/request-link', requestLinkLimiter, async (req, res) => {
   const parsed = requestLinkSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'invalid_email' });
@@ -45,7 +60,8 @@ router.post('/request-link', async (req, res) => {
 router.get('/verify', async (req, res) => {
   const token = typeof req.query.token === 'string' ? req.query.token : '';
   const redirectParam = typeof req.query.redirect === 'string' ? req.query.redirect : '/';
-  const safeRedirect = redirectParam.startsWith('/') && !redirectParam.startsWith('//') ? redirectParam : '/';
+  const safeRedirect =
+    redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes('\\') ? redirectParam : '/';
 
   if (!token) {
     res.status(400).send('Link tidak valid.');
@@ -73,8 +89,9 @@ router.get('/verify', async (req, res) => {
     maxAge: SESSION_MAX_AGE_MS,
   });
 
-  const clientUrl = process.env.CLIENT_URL ?? '';
-  res.redirect(`${clientUrl}${safeRedirect}`);
+  const clientUrl = process.env.CLIENT_URL;
+  const finalUrl = clientUrl ? new URL(safeRedirect, clientUrl).toString() : safeRedirect;
+  res.redirect(finalUrl);
 });
 
 router.get('/me', requireAuth, async (req, res) => {
