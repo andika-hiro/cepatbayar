@@ -10,12 +10,13 @@ export default function TripListScreen() {
   const [trips, setTrips] = useState<TripSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      const joinedIds = getJoinedTripIds();
+      const joinedIds = getJoinedTripIds().slice(-50);
       const [mine, joined] = await Promise.all([
         api.myTrips().catch((err) => (err instanceof ApiError && err.status === 401 ? [] : Promise.reject(err))),
         joinedIds.length > 0 ? api.tripSummaries(joinedIds) : Promise.resolve([]),
@@ -27,7 +28,12 @@ export default function TripListScreen() {
       setLoading(false);
     }
 
-    load();
+    load().catch(() => {
+      if (!cancelled) {
+        setError('Gagal muat daftar trip. Coba refresh halaman.');
+        setLoading(false);
+      }
+    });
     return () => {
       cancelled = true;
     };
@@ -63,6 +69,8 @@ export default function TripListScreen() {
           className="flex-1 border-none bg-transparent font-inter text-[13px] font-medium text-text outline-none placeholder:opacity-70"
         />
       </div>
+
+      {error && <div className="text-center font-inter text-[12.5px] text-neg">{error}</div>}
 
       <button
         onClick={() => navigate('/trip/new')}

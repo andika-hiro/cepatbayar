@@ -77,6 +77,20 @@ describe('TripListScreen', () => {
     expect(screen.getByText('Nggak ada trip yang cocok sama "bandung"')).toBeInTheDocument();
   });
 
+  it('shows an error message and stops loading when fetching trips fails', async () => {
+    vi.mocked(api.myTrips).mockRejectedValue(new Error('network error'));
+    renderScreen();
+    expect(await screen.findByText('Gagal muat daftar trip. Coba refresh halaman.')).toBeInTheDocument();
+  });
+
+  it('caps joined trip ids sent to the server at the most recent 50', async () => {
+    const ids = Array.from({ length: 60 }, (_, i) => `id-${i}`);
+    localStorage.setItem('cb.joinedTripIds', JSON.stringify(ids));
+    renderScreen();
+    await screen.findByText('Trip ke Jogja');
+    expect(api.tripSummaries).toHaveBeenCalledWith(ids.slice(-50));
+  });
+
   it('merges locally-joined trip ids with the authenticated user\'s own trips', async () => {
     localStorage.setItem('cb.joinedTripIds', JSON.stringify(['c3']));
     vi.mocked(api.tripSummaries).mockResolvedValue([

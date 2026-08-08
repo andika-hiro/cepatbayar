@@ -9,12 +9,13 @@ export default function IdentityPickerScreen() {
   const location = useLocation();
   const navigate = useNavigate();
   const [trip, setTrip] = useState<TripDetail | null>(null);
+  const [error, setError] = useState(false);
 
   const viaShareLink = (location.state as { viaShareLink?: boolean } | null)?.viaShareLink ?? true;
 
   useEffect(() => {
     if (!publicId) return;
-    api.tripDetail(publicId).then(setTrip);
+    api.tripDetail(publicId).then(setTrip).catch(() => setError(true));
   }, [publicId]);
 
   function handleSelect(memberId: number) {
@@ -23,6 +24,14 @@ export default function IdentityPickerScreen() {
     navigate(`/t/${publicId}/ringkasan`);
   }
 
+  if (error) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-2 px-5 text-center">
+        <div className="font-manrope text-base font-bold text-text">Trip nggak ketemu</div>
+        <div className="font-inter text-[13px] text-sub">Link-nya mungkin salah atau trip-nya udah dihapus.</div>
+      </div>
+    );
+  }
   if (!trip) return null;
 
   return (

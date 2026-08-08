@@ -63,6 +63,12 @@ describe('IdentityPickerScreen', () => {
     expect(getJoinedTripIds()).toEqual(['a1']);
   });
 
+  it('shows an error message instead of a blank page when the trip fetch fails', async () => {
+    vi.mocked(api.tripDetail).mockRejectedValue(new Error('network error'));
+    renderScreen(['/t/a1']);
+    expect(await screen.findByText('Trip nggak ketemu')).toBeInTheDocument();
+  });
+
   it('shows the trip name in the subtitle and the "bikin trip baru" link', async () => {
     renderScreen(['/t/a1']);
     expect(await screen.findByText('Trip ke Jogja')).toBeInTheDocument();

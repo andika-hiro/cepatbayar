@@ -29,8 +29,12 @@ export default function NewTripScreen() {
   }, []);
 
   async function handleRequestLink() {
-    await api.requestLink(email, '/trip/new');
-    setAuthStage('linkSent');
+    try {
+      await api.requestLink(email, '/trip/new');
+      setAuthStage('linkSent');
+    } catch {
+      setError('Gagal kirim link. Coba lagi.');
+    }
   }
 
   function addMember() {
@@ -91,6 +95,7 @@ export default function NewTripScreen() {
         ) : (
           <div className="font-inter text-sm text-sub">Cek email kamu, klik link buat lanjut.</div>
         )}
+        {error && <div className="font-inter text-[12.5px] text-neg">{error}</div>}
       </div>
     );
   }

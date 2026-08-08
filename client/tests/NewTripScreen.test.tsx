@@ -55,6 +55,16 @@ describe('NewTripScreen auth gate', () => {
     expect(api.requestLink).toHaveBeenCalledWith('budi@example.com', '/trip/new');
   });
 
+  it('shows an error message when requesting the magic link fails', async () => {
+    vi.mocked(api.me).mockRejectedValue(new ApiError(401));
+    vi.mocked(api.requestLink).mockRejectedValue(new Error('network error'));
+    renderScreen();
+    const user = userEvent.setup();
+    await user.type(await screen.findByPlaceholderText('email@kamu.com'), 'budi@example.com');
+    await user.click(screen.getByText('Kirim link masuk'));
+    expect(await screen.findByText('Gagal kirim link. Coba lagi.')).toBeInTheDocument();
+  });
+
   it('falls back to the email step when api.me() fails with a non-401 error', async () => {
     vi.mocked(api.me).mockRejectedValue(new ApiError(500));
     renderScreen();
