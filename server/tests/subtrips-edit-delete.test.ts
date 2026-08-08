@@ -3,7 +3,7 @@ import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { db } from '../src/db/client';
-import { trips, tripMembers, debts } from '../src/db/schema';
+import { trips, tripMembers, debts, subTripItems } from '../src/db/schema';
 import { createAuthedUser } from './helpers/auth';
 
 const app = createApp();
@@ -224,5 +224,111 @@ describe('DELETE /api/trips/:publicId/subtrips/:subTripId', () => {
     const { publicId, creatorMemberId } = await createTestTripWithSubTrip('delete-nan@example.com', ['Budi']);
     const res = await request(app).delete(`/api/trips/${publicId}/subtrips/not-a-number`).set('X-Member-Id', String(creatorMemberId));
     expect(res.status).toBe(404);
+  });
+});
+
+describe('PATCH /api/trips/:publicId/subtrips/:subTripId — per-item mode', () => {
+  it('replaces the item list wholesale and recomputes debts', async () => {
+    const { cookie } = await createAuthedUser('edit-peritem1@example.com');
+    const createTripRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip', destination: 'Test', startDate: '2026-01-01', endDate: '2026-01-02', members: ['Budi', 'Aji'],
+    });
+    const { publicId } = createTripRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, createdByMemberId: budi.id,
+      splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+      items: [{ name: 'Item A', price: 20000, participants: [{ memberId: aji.id }] }],
+    });
+    const subTripId = createRes.body.id;
+
+    const patchRes = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(budi.id))
+      .send({
+        name: 'Makan (edited)', category: 'makan', date: '2026-01-01',
+        payerMemberId: budi.id, createdByMemberId: budi.id,
+        splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+        items: [{ name: 'Item B', price: 40000, participants: [{ memberId: aji.id }] }],
+      });
+    expect(patchRes.status).toBe(200);
+
+    const itemRows = await db.select().from(subTripItems).where(eq(subTripItems.subTripId, subTripId));
+    expect(itemRows).toHaveLength(1);
+    expect(itemRows[0].name).toBe('Item B');
+
+    const debtRows = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+    expect(debtRows).toHaveLength(1);
+    expect(debtRows[0].amount).toBe(40000);
+  });
+
+  it('preserves settled status on an edit that keeps the same debtor', async () => {
+    const { cookie } = await createAuthedUser('edit-peritem2@example.com');
+    const createTripRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip', destination: 'Test', startDate: '2026-01-01', endDate: '2026-01-02', members: ['Budi', 'Aji'],
+    });
+    const { publicId } = createTripRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, createdByMemberId: budi.id,
+      splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+      items: [{ name: 'Item A', price: 20000, participants: [{ memberId: aji.id }] }],
+    });
+    const subTripId = createRes.body.id;
+    const [debtRow] = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+    await db.update(debts).set({ settled: true }).where(eq(debts.id, debtRow.id));
+
+    await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(budi.id))
+      .send({
+        name: 'Makan', category: 'makan', date: '2026-01-01',
+        payerMemberId: budi.id, createdByMemberId: budi.id,
+        splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+        items: [{ name: 'Item A', price: 40000, participants: [{ memberId: aji.id }] }],
+      });
+
+    const [updatedDebt] = await db.select().from(debts).where(eq(debts.memberId, aji.id));
+    expect(updatedDebt.settled).toBe(true);
+    expect(updatedDebt.amount).toBe(40000);
+  });
+
+  it('rejects a PATCH that tries to change splitMode from the stored value', async () => {
+    const { cookie } = await createAuthedUser('edit-peritem3@example.com');
+    const createTripRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip', destination: 'Test', startDate: '2026-01-01', endDate: '2026-01-02', members: ['Budi'],
+    });
+    const { publicId } = createTripRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+
+    const createRes = await request(app).post(`/api/trips/${publicId}/subtrips`).send({
+      name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: members[0].id, createdByMemberId: members[0].id,
+      splitMode: 'total', amount: 10000, participantMemberIds: [members[0].id],
+    });
+    const subTripId = createRes.body.id;
+
+    const patchRes = await request(app)
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}`)
+      .set('X-Member-Id', String(members[0].id))
+      .send({
+        name: 'Makan', category: 'makan', date: '2026-01-01',
+        payerMemberId: members[0].id, createdByMemberId: members[0].id,
+        splitMode: 'per_item', taxPercent: 0, servicePercent: 0,
+        items: [{ name: 'Item', price: 10000, participants: [{ memberId: members[0].id }] }],
+      });
+    expect(patchRes.status).toBe(400);
+    expect(patchRes.body.error).toBe('split_mode_locked');
   });
 });

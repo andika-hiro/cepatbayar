@@ -299,7 +299,6 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
   const loaded = await loadScopedSubTrip(req, res);
   if (!loaded) return;
   const { trip, subTrip: existing } = loaded;
-  const subTripId = existing.id;
 
   const authorized = await canModifySubTrip(req, trip, existing.createdByMemberId);
   if (!authorized) {
@@ -312,58 +311,99 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
     res.status(400).json({ error: 'invalid_body', issues: parsed.error.issues });
     return;
   }
-  if (parsed.data.splitMode !== 'total') {
-    res.status(400).json({ error: 'invalid_body' });
+  const data = parsed.data;
+
+  if (data.splitMode !== existing.splitMode) {
+    res.status(400).json({ error: 'split_mode_locked' });
     return;
   }
-  const { name, category, date, payerMemberId, amount, participantMemberIds, createdByMemberId } = parsed.data;
-  // Note: createdByMemberId from the request body is validated above (it must
-  // belong to the trip) but is intentionally never written in the
-  // `tx.update(subTrips).set(...)` below — the original creator is immutable
-  // once set, regardless of what a PATCH body claims.
-  const allIds = [...new Set([payerMemberId, createdByMemberId, ...participantMemberIds])];
+
+  const claimedMemberIdHeader = req.header('X-Member-Id');
+  const updatedByMemberId = claimedMemberIdHeader ? Number(claimedMemberIdHeader) : existing.createdByMemberId;
+
+  if (data.splitMode === 'total') {
+    const allIds = [...new Set([data.payerMemberId, data.createdByMemberId, ...data.participantMemberIds])];
+    const valid = await memberIdsBelongToTrip(trip.id, allIds);
+    if (!valid) {
+      res.status(400).json({ error: 'invalid_member' });
+      return;
+    }
+
+    const shares = computeEqualShares(data.amount, data.participantMemberIds, data.payerMemberId);
+    const payerParticipates = data.participantMemberIds.includes(data.payerMemberId);
+    const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, existing.id));
+    const reconciled = reconcileDebts(
+      existingDebtRows.map((d) => ({ id: d.id, memberId: d.memberId, settled: d.settled })),
+      shares,
+    );
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(subTrips)
+        .set({ name: data.name, category: data.category, date: data.date, payerMemberId: data.payerMemberId, amount: data.amount, payerParticipates, updatedByMemberId })
+        .where(eq(subTrips.id, existing.id));
+
+      for (const del of reconciled.toDelete) await tx.delete(debts).where(eq(debts.id, del.id));
+      for (const upd of reconciled.toUpdateAmount) await tx.update(debts).set({ amount: upd.amount }).where(eq(debts.id, upd.id));
+      if (reconciled.toInsert.length > 0) {
+        await tx.insert(debts).values(reconciled.toInsert.map((i) => ({ subTripId: existing.id, memberId: i.memberId, amount: i.amount })));
+      }
+    });
+
+    res.status(200).json({ id: existing.id });
+    return;
+  }
+
+  // splitMode === 'per_item'
+  const itemMemberIds = data.items.flatMap((item) =>
+    item.participants.flatMap((p) => (p.billedToMemberId ? [p.memberId, p.billedToMemberId] : [p.memberId])),
+  );
+  const allIds = [...new Set([data.payerMemberId, data.createdByMemberId, ...itemMemberIds])];
   const valid = await memberIdsBelongToTrip(trip.id, allIds);
   if (!valid) {
     res.status(400).json({ error: 'invalid_member' });
     return;
   }
 
-  const shares = computeEqualShares(amount, participantMemberIds, payerMemberId);
-  const payerParticipates = participantMemberIds.includes(payerMemberId);
-  const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+  const split = computeItemBasedShares(data.items, data.taxPercent, data.servicePercent, data.payerMemberId);
+  const payerParticipates = data.items.some((item) => item.participants.some((p) => p.memberId === data.payerMemberId));
+  const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, existing.id));
   const reconciled = reconcileDebts(
     existingDebtRows.map((d) => ({ id: d.id, memberId: d.memberId, settled: d.settled })),
-    shares,
+    split.shares,
   );
-
-  const claimedMemberIdHeader = req.header('X-Member-Id');
 
   await db.transaction(async (tx) => {
     await tx
       .update(subTrips)
       .set({
-        name,
-        category,
-        date,
-        payerMemberId,
-        amount,
-        payerParticipates,
-        updatedByMemberId: claimedMemberIdHeader ? Number(claimedMemberIdHeader) : existing.createdByMemberId,
+        name: data.name, category: data.category, date: data.date, payerMemberId: data.payerMemberId,
+        amount: split.grandTotal, payerParticipates, taxPercent: data.taxPercent, servicePercent: data.servicePercent, updatedByMemberId,
       })
-      .where(eq(subTrips.id, subTripId));
+      .where(eq(subTrips.id, existing.id));
 
-    for (const del of reconciled.toDelete) {
-      await tx.delete(debts).where(eq(debts.id, del.id));
+    const oldItemRows = await tx.select().from(subTripItems).where(eq(subTripItems.subTripId, existing.id));
+    const oldItemIds = oldItemRows.map((i) => i.id);
+    if (oldItemIds.length > 0) {
+      await tx.delete(subTripItemParticipants).where(inArray(subTripItemParticipants.itemId, oldItemIds));
+      await tx.delete(subTripItems).where(eq(subTripItems.subTripId, existing.id));
     }
-    for (const upd of reconciled.toUpdateAmount) {
-      await tx.update(debts).set({ amount: upd.amount }).where(eq(debts.id, upd.id));
+    for (const item of data.items) {
+      const [itemResult] = await tx.insert(subTripItems).values({ subTripId: existing.id, name: item.name, price: item.price });
+      const newItemId = itemResult.insertId;
+      await tx.insert(subTripItemParticipants).values(
+        item.participants.map((p) => ({ itemId: newItemId, memberId: p.memberId, billedToMemberId: p.billedToMemberId ?? null })),
+      );
     }
+
+    for (const del of reconciled.toDelete) await tx.delete(debts).where(eq(debts.id, del.id));
+    for (const upd of reconciled.toUpdateAmount) await tx.update(debts).set({ amount: upd.amount }).where(eq(debts.id, upd.id));
     if (reconciled.toInsert.length > 0) {
-      await tx.insert(debts).values(reconciled.toInsert.map((i) => ({ subTripId, memberId: i.memberId, amount: i.amount })));
+      await tx.insert(debts).values(reconciled.toInsert.map((i) => ({ subTripId: existing.id, memberId: i.memberId, amount: i.amount })));
     }
   });
 
-  res.status(200).json({ id: subTripId });
+  res.status(200).json({ id: existing.id });
 });
 
 router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUserIfPresent, async (req, res) => {
