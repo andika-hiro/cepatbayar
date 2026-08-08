@@ -1,6 +1,7 @@
 # Tahap 4: OCR Struk, Reminder WhatsApp & PWA Setup — Design Spec
 
-**Status:** Menunggu Review & Keputusan User (Checkpoint Wajib)
+**Status:** Disetujui (Opsi A `wa.me` dikonfirmasi oleh User)
+
 **Sumber kebenaran:** `context/prd-patungan-trip.md` §5.3, §5.7, §6, `context/Cepat Bayarkan.dc.html` + `context/handoff.md` (layar #10 WA Preview, #15 OCR Struk, #17 Install PWA).
 
 ---
