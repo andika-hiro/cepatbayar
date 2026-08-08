@@ -1,5 +1,7 @@
 node_modules/
 dist/
+server/public/
 .env
 .env.test
 *.log
+*.tsbuildinfo
