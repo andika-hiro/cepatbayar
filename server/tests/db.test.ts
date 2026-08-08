@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../src/db/client';
-import { users, trips, tripMembers, subTrips, debts, subTripItems, subTripItemParticipants } from '../src/db/schema';
+import { users, trips, tripMembers, subTrips, debts, subTripItems, subTripItemParticipants, memberAccounts, deposits } from '../src/db/schema';
 
 describe('database connection', () => {
   it('inserts and reads back a user', async () => {
@@ -74,3 +74,43 @@ describe('sub_trips split_mode/tax/service columns and sub_trip_items tables', (
     expect(participant.billedToMemberId).toBeNull();
   });
 });
+
+describe('member_accounts and deposits tables', () => {
+  it('inserts and queries member_accounts and deposits correctly', async () => {
+    await db.insert(users).values({ email: 'schema-test-3@example.com' });
+    const [user] = await db.select().from(users).where(eq(users.email, 'schema-test-3@example.com'));
+    await db.insert(trips).values({
+      publicId: 'schema-test-trip-3', name: 'Test Trip 3', destination: 'Test',
+      startDate: '2026-01-01', endDate: '2026-01-02', creatorUserId: user.id,
+    });
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, 'schema-test-trip-3'));
+    await db.insert(tripMembers).values({ tripId: trip.id, name: 'Budi' });
+    await db.insert(tripMembers).values({ tripId: trip.id, name: 'Adit' });
+    const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+
+    const budi = members.find(m => m.name === 'Budi')!;
+    const adit = members.find(m => m.name === 'Adit')!;
+
+    await db.insert(memberAccounts).values({
+      memberId: budi.id,
+      label: 'BCA',
+      accountNumber: '1234567890',
+      isDefault: true,
+    });
+    const [acc] = await db.select().from(memberAccounts).where(eq(memberAccounts.memberId, budi.id));
+    expect(acc.label).toBe('BCA');
+    expect(acc.isDefault).toBe(true);
+
+    await db.insert(deposits).values({
+      tripId: trip.id,
+      fromMemberId: budi.id,
+      toMemberId: adit.id,
+      amount: 50000,
+      proofNote: 'Transfer via BCA',
+    });
+    const [dep] = await db.select().from(deposits).where(eq(deposits.tripId, trip.id));
+    expect(dep.amount).toBe(50000);
+    expect(dep.fromMemberId).toBe(budi.id);
+  });
+});
+

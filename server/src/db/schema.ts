@@ -81,3 +81,23 @@ export const subTripItemParticipants = mysqlTable('sub_trip_item_participants', 
     name: 'stip_btm_fk',
   }),
 ]);
+
+export const memberAccounts = mysqlTable('member_accounts', {
+  id: int('id').autoincrement().primaryKey(),
+  memberId: int('member_id').notNull().references(() => tripMembers.id),
+  label: varchar('label', { length: 255 }).notNull(),
+  accountNumber: varchar('account_number', { length: 255 }).notNull(),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const deposits = mysqlTable('deposits', {
+  id: int('id').autoincrement().primaryKey(),
+  tripId: int('trip_id').notNull().references(() => trips.id),
+  fromMemberId: int('from_member_id').notNull().references(() => tripMembers.id),
+  toMemberId: int('to_member_id').notNull().references(() => tripMembers.id),
+  amount: int('amount').notNull(),
+  proofNote: varchar('proof_note', { length: 255 }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
