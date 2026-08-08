@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/client';
-import { debts, subTrips } from '../db/schema';
+import { debts, subTrips, tripMembers } from '../db/schema';
 import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
 import { computeEqualShares } from '../lib/splitLogic';
 import { isoDateSchema } from '../lib/validators';
@@ -59,6 +60,81 @@ router.post<{ publicId: string }>('/', async (req, res) => {
   });
 
   res.status(201).json({ id: subTripId });
+});
+
+router.get<{ publicId: string }>('/', async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  const rows = await db.select().from(subTrips).where(eq(subTrips.tripId, trip.id));
+  if (rows.length === 0) {
+    res.json([]);
+    return;
+  }
+
+  const payerIds = [...new Set(rows.map((r) => r.payerMemberId))];
+  const payers = await db.select().from(tripMembers).where(inArray(tripMembers.id, payerIds));
+  const payerNameById = new Map(payers.map((p) => [p.id, p.name]));
+
+  const subTripIds = rows.map((r) => r.id);
+  const unsettledRows = await db
+    .select({ subTripId: debts.subTripId })
+    .from(debts)
+    .where(and(inArray(debts.subTripId, subTripIds), eq(debts.settled, false)));
+  const unsettledCountBySubTrip = new Map<number, number>();
+  for (const r of unsettledRows) {
+    unsettledCountBySubTrip.set(r.subTripId, (unsettledCountBySubTrip.get(r.subTripId) ?? 0) + 1);
+  }
+
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      category: r.category,
+      date: r.date,
+      payerMemberId: r.payerMemberId,
+      payerName: payerNameById.get(r.payerMemberId) ?? '',
+      amount: r.amount,
+      unsettledCount: unsettledCountBySubTrip.get(r.id) ?? 0,
+    })),
+  );
+});
+
+router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const subTripId = Number(req.params.subTripId);
+  const [subTrip] = await db.select().from(subTrips).where(and(eq(subTrips.id, subTripId), eq(subTrips.tripId, trip.id)));
+  if (!subTrip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  const [payer] = await db.select().from(tripMembers).where(eq(tripMembers.id, subTrip.payerMemberId));
+  const debtRows = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+  const debtMemberIds = [...new Set(debtRows.map((d) => d.memberId))];
+  const debtMembers = debtMemberIds.length
+    ? await db.select().from(tripMembers).where(inArray(tripMembers.id, debtMemberIds))
+    : [];
+  const nameById = new Map(debtMembers.map((m) => [m.id, m.name]));
+
+  res.json({
+    id: subTrip.id,
+    name: subTrip.name,
+    category: subTrip.category,
+    date: subTrip.date,
+    payerMemberId: subTrip.payerMemberId,
+    payerName: payer?.name ?? '',
+    amount: subTrip.amount,
+    createdByMemberId: subTrip.createdByMemberId,
+    debts: debtRows.map((d) => ({ id: d.id, memberId: d.memberId, name: nameById.get(d.memberId) ?? '', amount: d.amount, settled: d.settled })),
+  });
 });
 
 export default router;
