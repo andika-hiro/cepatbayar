@@ -8,13 +8,23 @@ import { requireAuth } from '../auth/requireAuth';
 
 const router = Router();
 
-const createTripSchema = z.object({
-  name: z.string().trim().min(1),
-  destination: z.string().trim().min(1),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  members: z.array(z.string().trim().min(1)).min(1),
-});
+const isoDate = z.string().refine(
+  (val) =>
+    /^\d{4}-\d{2}-\d{2}$/.test(val) &&
+    !Number.isNaN(Date.parse(val)) &&
+    new Date(val).toISOString().slice(0, 10) === val,
+  { message: 'invalid_date' },
+);
+
+const createTripSchema = z
+  .object({
+    name: z.string().trim().min(1),
+    destination: z.string().trim().min(1),
+    startDate: isoDate,
+    endDate: isoDate,
+    members: z.array(z.string().trim().min(1)).min(1),
+  })
+  .refine((data) => data.startDate <= data.endDate, { message: 'end_before_start', path: ['endDate'] });
 
 async function summarizeTrips(tripRows: (typeof trips.$inferSelect)[]) {
   if (tripRows.length === 0) return [];

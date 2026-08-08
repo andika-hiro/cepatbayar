@@ -11,7 +11,7 @@ import { SESSION_COOKIE, SESSION_MAX_AGE_MS, signSession } from '../auth/session
 const router = Router();
 
 const requestLinkSchema = z.object({
-  email: z.string().email(),
+  email: z.string().email().max(255),
   redirect: z.string().startsWith('/').optional(),
 });
 

@@ -1,3 +1,4 @@
+import 'express-async-errors';
 import path from 'node:path';
 import fs from 'node:fs';
 import express from 'express';
@@ -30,6 +31,11 @@ export function createApp() {
       return;
     }
     res.sendFile(indexPath);
+  });
+
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error(err);
+    res.status(500).json({ error: 'internal_error' });
   });
 
   return app;
