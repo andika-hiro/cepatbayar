@@ -5,6 +5,7 @@ import { getCurrentMemberId } from '../lib/localTrips';
 import { formatDateRange, formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
+import InstallPwaSheet from '../components/InstallPwaSheet';
 
 export default function RingkasanScreen() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -13,7 +14,10 @@ export default function RingkasanScreen() {
   const [summary, setSummary] = useState<TripSummaryDetail | null>(null);
   const [subTrips, setSubTrips] = useState<SubTripListItem[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [installBannerVisible, setInstallBannerVisible] = useState(true);
+  const [installSheetOpen, setInstallSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
@@ -73,6 +77,30 @@ export default function RingkasanScreen() {
           Trip lain
         </button>
       </div>
+
+      {installBannerVisible && (
+        <div className="flex items-center justify-between rounded-card border border-accent/30 bg-accent/10 px-3.5 py-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-base">📱</span>
+            <span className="font-inter text-xs font-medium text-text">Install biar gampang dibuka pas jalan-jalan</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setInstallSheetOpen(true)}
+              className="rounded bg-accent px-2.5 py-1 font-inter text-xs font-bold text-onAccent"
+            >
+              Instal
+            </button>
+            <button
+              onClick={() => setInstallBannerVisible(false)}
+              className="px-1 font-inter text-xs font-bold text-sub"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
 
       {isEmpty ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
@@ -142,6 +170,14 @@ export default function RingkasanScreen() {
           onSaved={handleSaved}
         />
       )}
+
+      {installSheetOpen && (
+        <InstallPwaSheet
+          isOpen={installSheetOpen}
+          onClose={() => setInstallSheetOpen(false)}
+        />
+      )}
     </div>
   );
 }
+

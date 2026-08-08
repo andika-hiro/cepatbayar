@@ -1,0 +1,16 @@
+{
+  "name": "Cepat Bayarkan — Patungan Trip",
+  "short_name": "Cepat Bayar",
+  "description": "Aplikasi patungan trip seru tanpa drama nagih hutang",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f7",
+  "theme_color": "#005f73",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
