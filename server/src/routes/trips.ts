@@ -3,7 +3,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { db } from '../db/client';
-import { tripMembers, trips } from '../db/schema';
+import { tripMembers, trips, subTrips, debts } from '../db/schema';
 import { requireAuth } from '../auth/requireAuth';
 import { isoDateSchema } from '../lib/validators';
 import { getTripByPublicId } from '../lib/tripAccess';
@@ -98,6 +98,41 @@ router.get('/:publicId', async (req, res) => {
     endDate: trip.endDate,
     members: members.map((m) => ({ id: m.id, name: m.name })),
   });
+});
+
+router.get('/:publicId/summary', async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
+  const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+
+  const debtRows = await db
+    .select({ debtMemberId: debts.memberId, debtAmount: debts.amount, debtSettled: debts.settled, payerMemberId: subTrips.payerMemberId })
+    .from(debts)
+    .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
+    .where(eq(subTrips.tripId, trip.id));
+
+  const rollups = new Map<number, number>();
+  for (const m of members) rollups.set(m.id, 0);
+  for (const row of debtRows) {
+    if (row.debtSettled) continue;
+    rollups.set(row.payerMemberId, (rollups.get(row.payerMemberId) ?? 0) + row.debtAmount);
+    rollups.set(row.debtMemberId, (rollups.get(row.debtMemberId) ?? 0) - row.debtAmount);
+  }
+
+  const memberSummaries = members.map((m) => {
+    const rollup = rollups.get(m.id) ?? 0;
+    const status = rollup > 0 ? 'dilunasin' : rollup < 0 ? 'ngutang' : 'lunas';
+    return { memberId: m.id, name: m.name, rollup, status };
+  });
+
+  const subTripRows = await db.select({ amount: subTrips.amount }).from(subTrips).where(eq(subTrips.tripId, trip.id));
+  const tripTotal = subTripRows.reduce((sum, r) => sum + r.amount, 0);
+
+  res.json({ members: memberSummaries, tripTotal });
 });
 
 export default router;
