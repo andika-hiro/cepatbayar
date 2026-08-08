@@ -75,6 +75,8 @@ export default function AddEditSubTripSheet({
   function updateItem(key: string, patch: Partial<DraftItem>) {
     setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   }
+  const [taxPercentText, setTaxPercentText] = useState(initialData ? String(initialData.taxPercent) : '0');
+  const [servicePercentText, setServicePercentText] = useState(initialData ? String(initialData.servicePercent) : '0');
   const [payerOpen, setPayerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,8 +87,10 @@ export default function AddEditSubTripSheet({
 
   const amount = Number.parseInt(amountText, 10);
   const totalModeValid = Number.isFinite(amount) && amount > 0 && checkedIds.size > 0;
-  // Per-item validity is wired in a later task; until then this mode can't be submitted.
-  const canSubmit = Boolean(name.trim() && category && (splitMode === 'total' ? totalModeValid : false));
+  const perItemModeValid =
+    items.length > 0 &&
+    items.every((item) => item.name.trim() && Number.parseInt(item.priceText, 10) > 0 && item.participants.length > 0);
+  const canSubmit = Boolean(name.trim() && category && (splitMode === 'total' ? totalModeValid : perItemModeValid));
 
   function toggleMember(id: number) {
     const next = new Set(checkedIds);
@@ -100,16 +104,37 @@ export default function AddEditSubTripSheet({
     setSubmitting(true);
     setError(null);
     try {
-      const input: SubTripInput = {
-        name: name.trim(),
-        category,
-        date: initialData?.date ?? todayIso(),
-        payerMemberId,
-        createdByMemberId: initialData?.createdByMemberId ?? currentMemberId,
-        splitMode: 'total',
-        amount,
-        participantMemberIds: [...checkedIds],
-      };
+      const date = initialData?.date ?? todayIso();
+      const createdByMemberId = initialData?.createdByMemberId ?? currentMemberId;
+      const input: SubTripInput =
+        splitMode === 'total'
+          ? {
+              name: name.trim(),
+              category,
+              date,
+              payerMemberId,
+              createdByMemberId,
+              splitMode: 'total',
+              amount,
+              participantMemberIds: [...checkedIds],
+            }
+          : {
+              name: name.trim(),
+              category,
+              date,
+              payerMemberId,
+              createdByMemberId,
+              splitMode: 'per_item',
+              taxPercent: Number.parseFloat(taxPercentText) || 0,
+              servicePercent: Number.parseFloat(servicePercentText) || 0,
+              items: items.map((item) => ({
+                name: item.name.trim(),
+                price: Number.parseInt(item.priceText, 10),
+                participants: item.participants.map((p) =>
+                  p.billedToMemberId ? { memberId: p.memberId, billedToMemberId: p.billedToMemberId } : { memberId: p.memberId },
+                ),
+              })),
+            };
       if (mode === 'create') {
         await api.createSubTrip(publicId, input);
       } else if (initialData) {
@@ -246,6 +271,36 @@ export default function AddEditSubTripSheet({
             >
               + Tambah item
             </button>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-inter text-xs font-semibold text-sub">Pajak makanan (per item)</span>
+              <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
+                <input
+                  value={taxPercentText}
+                  onChange={(e) => setTaxPercentText(e.target.value.replace(/[^0-9.]/g, ''))}
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
+                />
+                <span className="font-mono text-sm text-sub">%</span>
+              </div>
+              <span className="font-inter text-[11px] text-sub">Dihitung per item dan dibebankan ke penanggungnya.</span>
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="font-inter text-xs font-semibold text-sub">Service charge (rata)</span>
+              <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
+                <input
+                  value={servicePercentText}
+                  onChange={(e) => setServicePercentText(e.target.value.replace(/[^0-9.]/g, ''))}
+                  inputMode="decimal"
+                  placeholder="0"
+                  className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
+                />
+                <span className="font-mono text-sm text-sub">%</span>
+              </div>
+              <span className="font-inter text-[11px] text-sub">
+                Dibagi rata ke semua peserta sub trip ini, tanpa peduli besar-kecil pesanannya masing-masing.
+              </span>
+            </label>
           </div>
         )}
 

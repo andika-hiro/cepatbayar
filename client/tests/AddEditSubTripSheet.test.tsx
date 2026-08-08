@@ -267,4 +267,37 @@ describe('AddEditSubTripSheet — item editor', () => {
   });
 });
 
+describe('AddEditSubTripSheet — per-item submit', () => {
+  it('submits a per-item create with items, tax, and service percent', async () => {
+    vi.mocked(api.createSubTrip).mockResolvedValue({ id: 1 });
+    render(<AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="create" onClose={() => {}} onSaved={() => {}} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('misal: Makan siang di Resto A'), 'Makan');
+    await user.click(screen.getByText('Makan', { selector: 'button' }));
+    await user.click(screen.getByText('Opsi lanjutan'));
+    await user.click(screen.getByText('Rincian per item'));
+    await user.type(screen.getByPlaceholderText('Nama item'), 'Nasi Goreng');
+    await user.type(screen.getAllByPlaceholderText('0')[0], '50000');
+    await user.click(screen.getByText('Simpan pengeluaran'));
+    expect(api.createSubTrip).toHaveBeenCalledWith(
+      'a1',
+      expect.objectContaining({
+        splitMode: 'per_item',
+        items: [{ name: 'Nasi Goreng', price: 50000, participants: expect.any(Array) }],
+      }),
+    );
+  });
+
+  it('disables submit until every item has a name and a positive price', async () => {
+    render(<AddEditSubTripSheet publicId="a1" members={members} currentMemberId={1} mode="create" onClose={() => {}} onSaved={() => {}} />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText('misal: Makan siang di Resto A'), 'Makan');
+    await user.click(screen.getByText('Makan', { selector: 'button' }));
+    await user.click(screen.getByText('Opsi lanjutan'));
+    await user.click(screen.getByText('Rincian per item'));
+    expect(screen.getByText('Simpan pengeluaran')).toBeDisabled();
+  });
+});
+
+
 
