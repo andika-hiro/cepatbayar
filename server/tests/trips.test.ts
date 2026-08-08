@@ -59,6 +59,56 @@ describe('GET /api/trips/mine', () => {
     expect(res.body[0].memberCount).toBe(1);
     expect(res.body[0].unsettledCount).toBe(0);
   });
+
+  it('reports the real unsettled debt count instead of a hardcoded 0', async () => {
+    const { cookie } = await createAuthedUser('unsettled-mine@example.com');
+    const createRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip Unsettled', destination: 'Bali', startDate: '2026-09-01', endDate: '2026-09-02', members: ['Budi', 'Aji'],
+    });
+    const { publicId } = createRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembersTable).where(eq(tripMembersTable.tripId, trip.id));
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    await db.insert(subTrips).values({
+      tripId: trip.id, name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, amount: 40000, createdByMemberId: budi.id,
+    });
+    const [subTrip] = await db.select().from(subTrips).where(eq(subTrips.tripId, trip.id));
+    await db.insert(debts).values([
+      { subTripId: subTrip.id, memberId: aji.id, amount: 20000, settled: false },
+      { subTripId: subTrip.id, memberId: aji.id, amount: 5000, settled: true },
+    ]);
+
+    const res = await request(app).get('/api/trips/mine').set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    // only the unsettled debt counts — settled debts are excluded.
+    expect(res.body[0].unsettledCount).toBe(1);
+  });
+
+  it('returns unsettledCount 0 for a trip with sub trips but no unsettled debts', async () => {
+    const { cookie } = await createAuthedUser('unsettled-none@example.com');
+    const createRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip All Settled', destination: 'Bali', startDate: '2026-09-01', endDate: '2026-09-02', members: ['Budi', 'Aji'],
+    });
+    const { publicId } = createRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembersTable).where(eq(tripMembersTable.tripId, trip.id));
+    const budi = members.find((m) => m.name === 'Budi')!;
+    const aji = members.find((m) => m.name === 'Aji')!;
+
+    await db.insert(subTrips).values({
+      tripId: trip.id, name: 'Makan', category: 'makan', date: '2026-01-01',
+      payerMemberId: budi.id, amount: 40000, createdByMemberId: budi.id,
+    });
+    const [subTrip] = await db.select().from(subTrips).where(eq(subTrips.tripId, trip.id));
+    await db.insert(debts).values({ subTripId: subTrip.id, memberId: aji.id, amount: 20000, settled: true });
+
+    const res = await request(app).get('/api/trips/mine').set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(res.body[0].unsettledCount).toBe(0);
+  });
 });
 
 describe('GET /api/trips/:publicId', () => {

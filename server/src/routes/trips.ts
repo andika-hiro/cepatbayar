@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { db } from '../db/client';
@@ -28,6 +28,17 @@ async function summarizeTrips(tripRows: (typeof trips.$inferSelect)[]) {
   for (const m of members) {
     countByTripId.set(m.tripId, (countByTripId.get(m.tripId) ?? 0) + 1);
   }
+
+  const unsettledDebtRows = await db
+    .select({ tripId: subTrips.tripId, debtId: debts.id })
+    .from(debts)
+    .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
+    .where(and(inArray(subTrips.tripId, ids), eq(debts.settled, false)));
+  const unsettledCountByTripId = new Map<number, number>();
+  for (const row of unsettledDebtRows) {
+    unsettledCountByTripId.set(row.tripId, (unsettledCountByTripId.get(row.tripId) ?? 0) + 1);
+  }
+
   return tripRows.map((t) => ({
     publicId: t.publicId,
     name: t.name,
@@ -35,7 +46,7 @@ async function summarizeTrips(tripRows: (typeof trips.$inferSelect)[]) {
     startDate: t.startDate,
     endDate: t.endDate,
     memberCount: countByTripId.get(t.id) ?? 0,
-    unsettledCount: 0,
+    unsettledCount: unsettledCountByTripId.get(t.id) ?? 0,
   }));
 }
 
