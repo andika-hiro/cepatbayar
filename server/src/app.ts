@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import authRouter from './routes/auth';
 import tripsRouter from './routes/trips';
 import subTripsRouter from './routes/subtrips';
+import saldoRouter from './routes/saldo';
 
 export function createApp() {
   const app = express();
@@ -25,6 +26,8 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/trips', tripsRouter);
   app.use('/api/trips/:publicId/subtrips', subTripsRouter);
+  app.use('/api/trips', saldoRouter);
+
 
   const publicDir = path.join(__dirname, '../public');
   app.use(express.static(publicDir));
