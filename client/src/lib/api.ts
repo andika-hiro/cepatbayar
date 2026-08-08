@@ -130,6 +130,52 @@ export interface CurrentUser {
   email: string;
 }
 
+export interface MemberAccount {
+  id: number;
+  label: string;
+  accountNumber: string;
+  isDefault: boolean;
+}
+
+export interface UnsettledDebtItem {
+  id: number;
+  subTripId: number;
+  subTripName: string;
+  date: string;
+  debtorId: number;
+  debtorName: string;
+  creditorId: number;
+  creditorName: string;
+  amount: number;
+  depositNote?: string;
+  accounts: MemberAccount[];
+}
+
+export interface DepositSummaryItem {
+  fromMemberId: number;
+  fromName: string;
+  toMemberId: number;
+  toName: string;
+  totalAmount: number;
+  remainingBalance: number;
+  low: boolean;
+}
+
+export interface SaldoData {
+  rollupMembers: MemberSummary[];
+  unsettledDebts: UnsettledDebtItem[];
+  deposits: DepositSummaryItem[];
+}
+
+export interface SettledDebtItem {
+  id: number;
+  subTripName: string;
+  debtorName: string;
+  creditorName: string;
+  amount: number;
+  settledAt: string;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number) {
@@ -182,4 +228,19 @@ export const api = {
     }),
   createTrip: (input: { name: string; destination: string; startDate: string; endDate: string; members: string[] }) =>
     request<{ publicId: string }>('/trips', { method: 'POST', body: JSON.stringify(input) }),
+  getSaldoData: (publicId: string) => request<SaldoData>(`/trips/${publicId}/saldo`),
+  getSettledDebts: (publicId: string) => request<SettledDebtItem[]>(`/trips/${publicId}/settled-debts`),
+  createDeposit: (publicId: string, input: { fromMemberId: number; toMemberId: number; amount: number; proofNote?: string }) =>
+    request<{ success: true; id: number }>(`/trips/${publicId}/deposits`, { method: 'POST', body: JSON.stringify(input) }),
+  addTripMember: (publicId: string, name: string) =>
+    request<{ id: number; name: string }>(`/trips/${publicId}/members`, { method: 'POST', body: JSON.stringify({ name }) }),
+  getMemberAccounts: (publicId: string, memberId: number) =>
+    request<MemberAccount[]>(`/trips/${publicId}/members/${memberId}/accounts`),
+  addMemberAccount: (publicId: string, memberId: number, input: { label: string; accountNumber: string; isDefault?: boolean }) =>
+    request<MemberAccount>(`/trips/${publicId}/members/${memberId}/accounts`, { method: 'POST', body: JSON.stringify(input) }),
+  setDefaultAccount: (publicId: string, memberId: number, accountId: number) =>
+    request<{ success: true }>(`/trips/${publicId}/members/${memberId}/accounts/${accountId}`, { method: 'PATCH', body: JSON.stringify({ isDefault: true }) }),
+  deleteMemberAccount: (publicId: string, memberId: number, accountId: number) =>
+    request<{ success: true }>(`/trips/${publicId}/members/${memberId}/accounts/${accountId}`, { method: 'DELETE' }),
 };
+
