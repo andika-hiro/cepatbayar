@@ -73,7 +73,11 @@ describe('GET /api/auth/verify', () => {
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe('http://localhost:5173/');
     } finally {
-      process.env.CLIENT_URL = original;
+      if (original === undefined) {
+        delete process.env.CLIENT_URL;
+      } else {
+        process.env.CLIENT_URL = original;
+      }
     }
   });
 

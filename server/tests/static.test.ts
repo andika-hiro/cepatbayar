@@ -14,4 +14,10 @@ describe('static file serving / SPA fallback', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: 'ok' });
   });
+
+  it('does not swallow an unmatched /api/* path into the SPA fallback', async () => {
+    const res = await request(createApp()).get('/api/does-not-exist');
+    expect(res.status).toBe(404);
+    expect(res.text).not.toContain('Not built yet');
+  });
 });
