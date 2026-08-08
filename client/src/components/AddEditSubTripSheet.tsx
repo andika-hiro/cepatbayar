@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { api, type SplitMode, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
 import { CATEGORIES } from '../lib/categories';
 import ItemRow, { type ItemRowParticipant } from './ItemRow';
+import OcrScanSheet from './OcrScanSheet';
 
 interface DraftItem {
   key: string;
@@ -33,6 +34,7 @@ export default function AddEditSubTripSheet({
   onClose,
   onSaved,
 }: AddEditSubTripSheetProps) {
+  const [ocrSheetOpen, setOcrSheetOpen] = useState(false);
   const [name, setName] = useState(initialData?.name ?? '');
   const [category, setCategory] = useState<SubTripCategory | null>(initialData?.category ?? null);
   const [amountText, setAmountText] = useState(initialData ? String(initialData.amount) : '');
@@ -99,6 +101,22 @@ export default function AddEditSubTripSheet({
     setCheckedIds(next);
   }
 
+  function handleApplyOcr(draft: { items: { name: string; price: number }[]; taxPercent: number; servicePercent: number }) {
+    setSplitMode('per_item');
+    setTaxPercentText(String(draft.taxPercent));
+    setServicePercentText(String(draft.servicePercent));
+    setItems(
+      draft.items.map((item, idx) => ({
+        key: `ocr-item-${idx}-${Date.now()}`,
+        name: item.name,
+        priceText: String(item.price),
+        participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })),
+      }))
+    );
+    setOcrSheetOpen(false);
+    setAdvancedOpen(true);
+  }
+
   async function handleSubmit() {
     if (!canSubmit || !category) return;
     setSubmitting(true);
@@ -148,8 +166,7 @@ export default function AddEditSubTripSheet({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-20 flex flex-col bg-bg">
+
       <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
         <button onClick={onClose} className="font-inter text-sm text-sub">
           Batal
@@ -188,6 +205,14 @@ export default function AddEditSubTripSheet({
           </div>
         </div>
 
+        <button
+          type="button"
+          onClick={() => setOcrSheetOpen(true)}
+          className="flex items-center justify-center gap-2 rounded-input border border-accent/40 bg-accent/10 px-3.5 py-3 font-inter text-xs font-bold text-accent"
+        >
+          📷 Scan struk (isi otomatis pakai OCR)
+        </button>
+
         <div className="flex flex-col gap-2">
           <button
             type="button"
@@ -197,6 +222,7 @@ export default function AddEditSubTripSheet({
             <span>Opsi lanjutan</span>
             <span>{advancedOpen ? '▴' : '▾'}</span>
           </button>
+
           {advancedOpen && (
             <div className="flex flex-col gap-1.5 rounded-input border border-border bg-surface p-3.5">
               <span className="font-inter text-xs font-semibold text-sub">Cara bagi</span>
@@ -375,6 +401,15 @@ export default function AddEditSubTripSheet({
           Simpan pengeluaran
         </button>
       </div>
+
+      {ocrSheetOpen && (
+        <OcrScanSheet
+          isOpen={ocrSheetOpen}
+          onClose={() => setOcrSheetOpen(false)}
+          onApply={handleApplyOcr}
+        />
+      )}
     </div>
   );
 }
+

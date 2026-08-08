@@ -197,6 +197,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface OcrScanResult {
+  items: { name: string; price: number }[];
+  taxPercent: number;
+  servicePercent: number;
+  total: number;
+}
+
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
   requestLink: (email: string, redirect?: string) =>
@@ -242,5 +249,8 @@ export const api = {
     request<{ success: true }>(`/trips/${publicId}/members/${memberId}/accounts/${accountId}`, { method: 'PATCH', body: JSON.stringify({ isDefault: true }) }),
   deleteMemberAccount: (publicId: string, memberId: number, accountId: number) =>
     request<{ success: true }>(`/trips/${publicId}/members/${memberId}/accounts/${accountId}`, { method: 'DELETE' }),
+  scanReceipt: (imageBase64: string) =>
+    request<OcrScanResult>('/ocr/scan', { method: 'POST', body: JSON.stringify({ imageBase64 }) }),
 };
+
 
