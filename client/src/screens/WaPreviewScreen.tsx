@@ -48,7 +48,7 @@ export default function WaPreviewScreen() {
     groupMessageText += `📍 ${group.subTripName} (${group.date})\n`;
     group.debts.forEach((debt) => {
       grandTotalUnsettled += debt.amount;
-      const acc = debt.accounts[0];
+      const acc = debt.accounts.find((a) => a.isDefault) || debt.accounts[0];
       const accText = acc ? ` (${acc.label}: ${acc.accountNumber} a.n. ${debt.creditorName})` : '';
       groupMessageText += ` • ${debt.debtorName} → ${debt.creditorName}: ${formatRupiah(debt.amount)}${accText}\n`;
     });
