@@ -5,6 +5,11 @@ import IdentityPickerScreen from './screens/IdentityPickerScreen';
 import RingkasanScreen from './screens/RingkasanScreen';
 import RiwayatScreen from './screens/RiwayatScreen';
 import SubTripDetailScreen from './screens/SubTripDetailScreen';
+import SaldoScreen from './screens/SaldoScreen';
+import RiwayatPelunasanScreen from './screens/RiwayatPelunasanScreen';
+import PengaturanScreen from './screens/PengaturanScreen';
+import KelolaAnggotaScreen from './screens/KelolaAnggotaScreen';
+import RekeningDetailScreen from './screens/RekeningDetailScreen';
 import ProfilePlaceholderScreen from './screens/ProfilePlaceholderScreen';
 
 export default function App() {
@@ -16,7 +21,13 @@ export default function App() {
       <Route path="/t/:publicId/ringkasan" element={<RingkasanScreen />} />
       <Route path="/t/:publicId/riwayat" element={<RiwayatScreen />} />
       <Route path="/t/:publicId/subtrip/:subTripId" element={<SubTripDetailScreen />} />
+      <Route path="/t/:publicId/saldo" element={<SaldoScreen />} />
+      <Route path="/t/:publicId/riwayat-pelunasan" element={<RiwayatPelunasanScreen />} />
+      <Route path="/t/:publicId/pengaturan" element={<PengaturanScreen />} />
+      <Route path="/t/:publicId/pengaturan/anggota" element={<KelolaAnggotaScreen />} />
+      <Route path="/t/:publicId/pengaturan/anggota/:memberId" element={<RekeningDetailScreen />} />
       <Route path="/profil" element={<ProfilePlaceholderScreen />} />
     </Routes>
   );
 }
+
