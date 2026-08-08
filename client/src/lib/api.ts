@@ -36,6 +36,17 @@ export interface TripSummaryDetail {
   tripTotal: number;
 }
 
+// Distinct from MemberSummary.status above: the /saldo rollup endpoint
+// returns 'pos' | 'neg' | 'zero', not 'dilunasin' | 'ngutang' | 'lunas'.
+export type RollupStatus = 'pos' | 'neg' | 'zero';
+
+export interface RollupMember {
+  memberId: number;
+  name: string;
+  rollup: number;
+  status: RollupStatus;
+}
+
 export interface SubTripListItem {
   id: number;
   name: string;
@@ -162,7 +173,7 @@ export interface DepositSummaryItem {
 }
 
 export interface SaldoData {
-  rollupMembers: MemberSummary[];
+  rollupMembers: RollupMember[];
   unsettledDebts: UnsettledDebtItem[];
   deposits: DepositSummaryItem[];
 }

@@ -77,8 +77,8 @@ export default function SaldoScreen() {
         </div>
         <div className="flex flex-col gap-2">
           {saldoData.rollupMembers.map((m) => {
-            const statusLabel = m.status === 'dilunasin' ? 'Dilunasin' : m.status === 'ngutang' ? 'Ngutang' : 'Lunas';
-            const statusColor = m.status === 'dilunasin' ? 'text-pos' : m.status === 'ngutang' ? 'text-neg' : 'text-sub';
+            const statusLabel = m.status === 'pos' ? 'Dilunasin' : m.status === 'neg' ? 'Ngutang' : 'Lunas';
+            const statusColor = m.status === 'pos' ? 'text-pos' : m.status === 'neg' ? 'text-neg' : 'text-sub';
             return (
 
               <div key={m.memberId} className="flex items-center justify-between rounded-card border border-border bg-surface px-3.5 py-3">

@@ -27,8 +27,8 @@ describe('SaldoScreen', () => {
   it('renders all debts and deposit summaries', async () => {
     vi.mocked(api.getSaldoData).mockResolvedValue({
       rollupMembers: [
-        { memberId: 1, name: 'Adit', rollup: 10000, status: 'dilunasin' },
-        { memberId: 2, name: 'Budi', rollup: -10000, status: 'ngutang' },
+        { memberId: 1, name: 'Adit', rollup: 10000, status: 'pos' },
+        { memberId: 2, name: 'Budi', rollup: -10000, status: 'neg' },
       ],
 
       unsettledDebts: [
@@ -68,9 +68,32 @@ describe('SaldoScreen', () => {
       expect(screen.getByText(/Saldo deposit menipis/)).toBeInTheDocument();
     });
 
+    // Adit is net creditor (status 'pos') -> should show green "Dilunasin"
+    const aditLabel = await screen.findByText('Dilunasin');
+    expect(aditLabel.className).toContain('text-pos');
 
+    // Budi is net debtor (status 'neg') -> should show red "Ngutang"
+    const budiLabel = await screen.findByText('Ngutang');
+    expect(budiLabel.className).toContain('text-neg');
+  });
 
+  it('renders the neutral "Lunas" label/color for a zero rollup status', async () => {
+    vi.mocked(api.getSaldoData).mockResolvedValue({
+      rollupMembers: [{ memberId: 1, name: 'Adit', rollup: 0, status: 'zero' }],
+      unsettledDebts: [],
+      deposits: [],
+    });
 
+    render(
+      <MemoryRouter initialEntries={['/t/test-trip/saldo']}>
+        <Routes>
+          <Route path="/t/:publicId/saldo" element={<SaldoScreen />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const lunasLabel = await screen.findByText('Lunas');
+    expect(lunasLabel.className).toContain('text-sub');
 
 
   });
