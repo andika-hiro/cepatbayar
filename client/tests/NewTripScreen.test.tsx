@@ -54,6 +54,18 @@ describe('NewTripScreen auth gate', () => {
     expect(await screen.findByText('Cek email kamu, klik link buat lanjut.')).toBeInTheDocument();
     expect(api.requestLink).toHaveBeenCalledWith('budi@example.com', '/trip/new');
   });
+
+  it('falls back to the email step when api.me() fails with a non-401 error', async () => {
+    vi.mocked(api.me).mockRejectedValue(new ApiError(500));
+    renderScreen();
+    expect(await screen.findByPlaceholderText('email@kamu.com')).toBeInTheDocument();
+  });
+
+  it('falls back to the email step when api.me() throws a non-ApiError', async () => {
+    vi.mocked(api.me).mockRejectedValue(new Error('network error'));
+    renderScreen();
+    expect(await screen.findByPlaceholderText('email@kamu.com')).toBeInTheDocument();
+  });
 });
 
 describe('NewTripScreen form', () => {

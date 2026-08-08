@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, ApiError } from '../lib/api';
+import { api } from '../lib/api';
 import { addJoinedTripId } from '../lib/localTrips';
 
 type AuthStage = 'checking' | 'needsEmail' | 'linkSent' | 'authenticated';
@@ -23,10 +23,8 @@ export default function NewTripScreen() {
     api
       .me()
       .then(() => setAuthStage('authenticated'))
-      .catch((err) => {
-        if (err instanceof ApiError && err.status === 401) {
-          setAuthStage('needsEmail');
-        }
+      .catch(() => {
+        setAuthStage('needsEmail');
       });
   }, []);
 
