@@ -1,9 +1,10 @@
+import crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
 import { createApp } from '../src/app';
 import { db } from '../src/db/client';
-import { users } from '../src/db/schema';
+import { authTokens, users } from '../src/db/schema';
 
 vi.mock('../src/mail', () => ({
   sendMagicLinkEmail: vi.fn().mockResolvedValue(undefined),
@@ -45,6 +46,34 @@ describe('GET /api/auth/verify', () => {
 
   it('rejects an invalid token', async () => {
     const res = await request(app).get('/api/auth/verify?token=not-a-real-token');
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a token that has already been used (single-use enforcement)', async () => {
+    await request(app).post('/api/auth/request-link').send({ email: 'dewi@example.com' });
+    const link = vi.mocked(sendMagicLinkEmail).mock.calls.at(-1)![1];
+    const token = new URL(link).searchParams.get('token')!;
+
+    const first = await request(app).get(`/api/auth/verify?token=${token}`);
+    expect(first.status).toBe(302);
+
+    const second = await request(app).get(`/api/auth/verify?token=${token}`);
+    expect(second.status).toBe(400);
+  });
+
+  it('rejects a token whose auth_tokens row has already expired (expiry enforcement)', async () => {
+    await db.insert(users).values({ email: 'expired-user@example.com' });
+    const [user] = await db.select().from(users).where(eq(users.email, 'expired-user@example.com'));
+
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    await db.insert(authTokens).values({
+      userId: user.id,
+      tokenHash,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+
+    const res = await request(app).get(`/api/auth/verify?token=${rawToken}`);
     expect(res.status).toBe(400);
   });
 });
