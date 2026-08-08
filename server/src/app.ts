@@ -7,6 +7,7 @@ import authRouter from './routes/auth';
 import tripsRouter from './routes/trips';
 import subTripsRouter from './routes/subtrips';
 import saldoRouter from './routes/saldo';
+import membersRouter from './routes/members';
 
 export function createApp() {
   const app = express();
@@ -27,6 +28,8 @@ export function createApp() {
   app.use('/api/trips', tripsRouter);
   app.use('/api/trips/:publicId/subtrips', subTripsRouter);
   app.use('/api/trips', saldoRouter);
+  app.use('/api/trips', membersRouter);
+
 
 
   const publicDir = path.join(__dirname, '../public');
