@@ -61,3 +61,25 @@ Keduanya harus `HTTP/2 200`.
 ## Kalau ada masalah
 
 Log error ada di `~/cb.andikahiro.my.id/stderr.log` di server (sama seperti project Node lain di akun ini).
+
+### Known issue: `npm install` bisa crash di server ini
+
+Ketemu 2x (2026-08-09): `npm install` di server crash dengan `Aborted (core dumped)` /
+`pthread_create: Resource temporarily unavailable` — dikonfirmasi ini masalah host-level
+(limit proses/thread per akun dari CloudLinux LVE), bukan masalah di project ini — bahkan
+`npm --version` di app lain yang sudah jalan lama (`rekber`) ikut crash pas dicoba di
+waktu yang sama.
+
+`scripts/deploy.sh` sekarang otomatis skip `npm install` kalau `package-lock.json` tidak
+berubah dari deploy sebelumnya (paling sering terjadi — kebanyakan perubahan cuma logic,
+bukan dependency baru), jadi biasanya tidak kena masalah ini sama sekali. Kalau memang ada
+dependency baru DAN `npm install` crash: deploy tetap lanjut jalan pakai `node_modules`
+yang lama (basi kalau dependency-nya benar-benar dipakai kodenya), lalu install manual
+belakangan setelah masalah host-nya reda:
+```bash
+ssh -i ~/.ssh/id_ed25519_nyanhosting andikah1@103.59.160.21
+cd cb.andikahiro.my.id && source ~/nodevenv/cb.andikahiro.my.id/22/bin/activate
+npm install --omit=dev
+deactivate
+touch tmp/restart.txt
+```
