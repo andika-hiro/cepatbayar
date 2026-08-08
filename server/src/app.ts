@@ -8,6 +8,7 @@ import tripsRouter from './routes/trips';
 import subTripsRouter from './routes/subtrips';
 import saldoRouter from './routes/saldo';
 import membersRouter from './routes/members';
+import ocrRouter from './routes/ocr';
 
 export function createApp() {
   const app = express();
@@ -29,6 +30,8 @@ export function createApp() {
   app.use('/api/trips/:publicId/subtrips', subTripsRouter);
   app.use('/api/trips', saldoRouter);
   app.use('/api/trips', membersRouter);
+  app.use('/api/ocr', ocrRouter);
+
 
 
 
