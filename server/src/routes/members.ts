@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { db } from '../db/client';
 import { trips, tripMembers, memberAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
+import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
 
 const router = Router();
 
@@ -25,16 +26,47 @@ router.post('/:publicId/members', async (req, res) => {
   res.status(201).json({ id: inserted[0].insertId, name: name.trim() });
 });
 
+// Shared preamble for every route scoped to a single member
+// (:publicId/:memberId): looks up the trip, safely parses memberId, and
+// verifies memberId actually belongs to that trip (tripMembers.id is a
+// globally unique auto-increment integer shared across every trip, so
+// without this check any memberId could be paired with any publicId).
+// Writes a 404 on any failure so callers can just do `if (!loaded) return;`.
+async function loadScopedMember(req: Request, res: Response): Promise<{ tripId: number; memberId: number } | null> {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'not_found' });
+    return null;
+  }
+  const memberId = parseInt(req.params.memberId, 10);
+  if (!Number.isInteger(memberId) || memberId <= 0) {
+    res.status(404).json({ error: 'not_found' });
+    return null;
+  }
+  const belongs = await memberIdsBelongToTrip(trip.id, [memberId]);
+  if (!belongs) {
+    res.status(404).json({ error: 'not_found' });
+    return null;
+  }
+  return { tripId: trip.id, memberId };
+}
+
 // GET /api/trips/:publicId/members/:memberId/accounts
 router.get('/:publicId/members/:memberId/accounts', async (req, res) => {
-  const memberId = parseInt(req.params.memberId, 10);
+  const loaded = await loadScopedMember(req, res);
+  if (!loaded) return;
+  const { memberId } = loaded;
+
   const accounts = await db.select().from(memberAccounts).where(eq(memberAccounts.memberId, memberId));
   res.json(accounts);
 });
 
 // POST /api/trips/:publicId/members/:memberId/accounts
 router.post('/:publicId/members/:memberId/accounts', async (req, res) => {
-  const memberId = parseInt(req.params.memberId, 10);
+  const loaded = await loadScopedMember(req, res);
+  if (!loaded) return;
+  const { memberId } = loaded;
+
   const { label, accountNumber, isDefault } = req.body;
 
   if (!label || !accountNumber) {
@@ -58,8 +90,24 @@ router.post('/:publicId/members/:memberId/accounts', async (req, res) => {
 
 // PATCH /api/trips/:publicId/members/:memberId/accounts/:accountId
 router.patch('/:publicId/members/:memberId/accounts/:accountId', async (req, res) => {
-  const memberId = parseInt(req.params.memberId, 10);
+  const loaded = await loadScopedMember(req, res);
+  if (!loaded) return;
+  const { memberId } = loaded;
+
   const accountId = parseInt(req.params.accountId, 10);
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const [account] = await db
+    .select()
+    .from(memberAccounts)
+    .where(and(eq(memberAccounts.id, accountId), eq(memberAccounts.memberId, memberId)));
+  if (!account) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+
   const { isDefault } = req.body;
 
   if (isDefault) {
@@ -72,8 +120,23 @@ router.patch('/:publicId/members/:memberId/accounts/:accountId', async (req, res
 
 // DELETE /api/trips/:publicId/members/:memberId/accounts/:accountId
 router.delete('/:publicId/members/:memberId/accounts/:accountId', async (req, res) => {
-  const memberId = parseInt(req.params.memberId, 10);
+  const loaded = await loadScopedMember(req, res);
+  if (!loaded) return;
+  const { memberId } = loaded;
+
   const accountId = parseInt(req.params.accountId, 10);
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const [account] = await db
+    .select()
+    .from(memberAccounts)
+    .where(and(eq(memberAccounts.id, accountId), eq(memberAccounts.memberId, memberId)));
+  if (!account) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
 
   await db.delete(memberAccounts).where(and(eq(memberAccounts.id, accountId), eq(memberAccounts.memberId, memberId)));
   res.json({ success: true });

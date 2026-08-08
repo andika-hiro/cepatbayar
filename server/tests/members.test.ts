@@ -87,4 +87,75 @@ describe('Member & Accounts API', () => {
     const remaining = await db.select().from(memberAccounts).where(eq(memberAccounts.memberId, memberBudiId));
     expect(remaining).toHaveLength(0);
   });
+
+  describe('cross-trip scoping (IDOR protection)', () => {
+    let otherTripPublicId: string;
+    let otherMemberId: number;
+    let otherAccountId: number;
+
+    beforeEach(async () => {
+      otherTripPublicId = 'other-idor-trip';
+      await db.insert(users).values({ email: 'other-member-test@example.com' });
+      const [otherUser] = await db.select().from(users).where(eq(users.email, 'other-member-test@example.com'));
+
+      await db.insert(trips).values({
+        publicId: otherTripPublicId,
+        name: 'Jakarta Trip',
+        destination: 'Jakarta',
+        startDate: '2026-08-01',
+        endDate: '2026-08-05',
+        creatorUserId: otherUser.id,
+      });
+      const [otherTrip] = await db.select().from(trips).where(eq(trips.publicId, otherTripPublicId));
+
+      await db.insert(tripMembers).values({ tripId: otherTrip.id, name: 'Dedi' });
+      const otherMembers = await db.select().from(tripMembers).where(eq(tripMembers.tripId, otherTrip.id));
+      otherMemberId = otherMembers[0].id;
+
+      await db.insert(memberAccounts).values({ memberId: otherMemberId, label: 'BRI', accountNumber: '333', isDefault: true });
+      const otherAccs = await db.select().from(memberAccounts).where(eq(memberAccounts.memberId, otherMemberId));
+      otherAccountId = otherAccs[0].id;
+    });
+
+    it('GET rejects a memberId that belongs to a different trip', async () => {
+      const res = await request(app).get(`/api/trips/${tripPublicId}/members/${otherMemberId}/accounts`);
+      expect(res.status).not.toBe(200);
+    });
+
+    it('POST rejects a memberId that belongs to a different trip', async () => {
+      const res = await request(app)
+        .post(`/api/trips/${tripPublicId}/members/${otherMemberId}/accounts`)
+        .send({ label: 'Fraud', accountNumber: '999', isDefault: true });
+      expect(res.status).not.toBe(200);
+      expect(res.status).not.toBe(201);
+
+      const accs = await db.select().from(memberAccounts).where(eq(memberAccounts.memberId, otherMemberId));
+      expect(accs).toHaveLength(1); // unchanged, no fraudulent account inserted
+    });
+
+    it('PATCH rejects a memberId/accountId that belongs to a different trip', async () => {
+      const res = await request(app)
+        .patch(`/api/trips/${tripPublicId}/members/${otherMemberId}/accounts/${otherAccountId}`)
+        .send({ isDefault: true });
+      expect(res.status).not.toBe(200);
+    });
+
+    it('PATCH rejects an accountId that does not belong to the given memberId, even within the same trip', async () => {
+      const res = await request(app)
+        .patch(`/api/trips/${tripPublicId}/members/${memberBudiId}/accounts/${otherAccountId}`)
+        .send({ isDefault: true });
+      expect(res.status).not.toBe(200);
+
+      const [account] = await db.select().from(memberAccounts).where(eq(memberAccounts.id, otherAccountId));
+      expect(account.memberId).toBe(otherMemberId); // untouched
+    });
+
+    it('DELETE rejects a memberId/accountId that belongs to a different trip', async () => {
+      const res = await request(app).delete(`/api/trips/${tripPublicId}/members/${otherMemberId}/accounts/${otherAccountId}`);
+      expect(res.status).not.toBe(200);
+
+      const stillThere = await db.select().from(memberAccounts).where(eq(memberAccounts.id, otherAccountId));
+      expect(stillThere).toHaveLength(1); // not deleted
+    });
+  });
 });
