@@ -1,0 +1,37 @@
+import type { TripSummary } from '../lib/api';
+
+interface TripCardProps {
+  trip: TripSummary;
+  onOpen: (publicId: string) => void;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const fmt = (iso: string) => {
+    const [, month, day] = iso.split('-');
+    return `${Number(day)} ${MONTHS[Number(month) - 1]}`;
+  };
+  return `${fmt(startDate)}–${fmt(endDate)}`;
+}
+
+export default function TripCard({ trip, onOpen }: TripCardProps) {
+  const statusLabel = trip.unsettledCount > 0 ? `${trip.unsettledCount} tagihan belum lunas` : 'Semua lunas';
+  const statusColor = trip.unsettledCount > 0 ? 'text-neg' : 'text-pos';
+
+  return (
+    <button
+      onClick={() => onOpen(trip.publicId)}
+      className="flex flex-col gap-1.5 rounded-card border border-border bg-surface px-[15px] py-3.5 text-left font-inter"
+    >
+      <div className="font-manrope text-[15px] font-bold text-text">{trip.name}</div>
+      <div className="text-xs text-sub">
+        {trip.destination} · {formatDateRange(trip.startDate, trip.endDate)}
+      </div>
+      <div className="mt-1 flex items-center justify-between">
+        <div className="text-[11.5px] font-medium text-sub">{trip.memberCount} orang</div>
+        <div className={`text-[11.5px] font-semibold ${statusColor}`}>{statusLabel}</div>
+      </div>
+    </button>
+  );
+}
