@@ -11,7 +11,10 @@ export interface OcrResult {
   isFallback?: boolean;
 }
 
-const MODELS_TO_TRY = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
+// Verified directly against the live Gemini API (2026-08-09): gemini-1.5-*
+// and gemini-2.x models are gone (404) or rate-limited (429) on this key —
+// only the 3.x generation actually responds. Re-verify before changing.
+const MODELS_TO_TRY = ['gemini-3.6-flash', 'gemini-3.5-flash'];
 
 const RECEIPT_PROMPT = `Anda adalah OCR kecerdasan buatan serba bisa untuk membaca segala jenis struk belanja & nota di Indonesia (struk kasir thermal, nota warung, struk Indomaret/Alfamart, bill restoran, struk GoFood/GrabFood).
 
