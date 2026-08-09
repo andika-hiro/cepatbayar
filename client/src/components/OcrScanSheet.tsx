@@ -25,11 +25,17 @@ function compressAndResizeImage(file: File): Promise<string> {
           resolve(res);
         }
       };
-      const timer = setTimeout(() => finish(dataUrl), 100);
+      // Generous timeout — this only exists as a safety net in case image
+      // decode never fires; it should essentially never trigger in practice.
+      const timer = setTimeout(() => finish(dataUrl), 3000);
       img.onload = () => {
         clearTimeout(timer);
         try {
-          const MAX_DIM = 1200;
+          // Receipt text (especially thermal-printer fonts) needs real
+          // resolution to stay legible for OCR — 1200px made photos blurry
+          // enough that the model frequently couldn't read them at all.
+          // 10MB server limit gives plenty of headroom for 2000px JPEGs.
+          const MAX_DIM = 2000;
           let width = img.width || 800;
           let height = img.height || 600;
 
@@ -52,7 +58,7 @@ function compressAndResizeImage(file: File): Promise<string> {
             return;
           }
           ctx.drawImage(img, 0, 0, width, height);
-          finish(canvas.toDataURL('image/jpeg', 0.85));
+          finish(canvas.toDataURL('image/jpeg', 0.92));
         } catch {
           finish(dataUrl);
         }
