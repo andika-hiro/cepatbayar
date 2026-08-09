@@ -8,6 +8,64 @@ interface OcrScanSheetProps {
   onApply: (draft: { items: { name: string; price: number }[]; taxPercent: number; servicePercent: number }) => void;
 }
 
+function compressAndResizeImage(file: File): Promise<string> {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) {
+        resolve('data:image/png;base64,mock');
+        return;
+      }
+      const img = new Image();
+      let done = false;
+      const finish = (res: string) => {
+        if (!done) {
+          done = true;
+          resolve(res);
+        }
+      };
+      const timer = setTimeout(() => finish(dataUrl), 100);
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          const MAX_DIM = 1200;
+          let width = img.width || 800;
+          let height = img.height || 600;
+
+          if (width > MAX_DIM || height > MAX_DIM) {
+            if (width > height) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            } else {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            finish(dataUrl);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          finish(canvas.toDataURL('image/jpeg', 0.85));
+        } catch {
+          finish(dataUrl);
+        }
+      };
+      img.onerror = () => finish(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.onerror = () => resolve('data:image/png;base64,mock');
+    reader.readAsDataURL(file);
+  });
+}
+
+
 export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetProps) {
   const [step, setStep] = useState<'capture' | 'loading' | 'draft'>('capture');
   const [items, setItems] = useState<{ name: string; price: number }[]>([]);
@@ -32,16 +90,18 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        handleScan(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      setStep('loading');
+      setError(null);
+      const imageData = await compressAndResizeImage(file);
+      await handleScan(imageData);
+    } catch {
+      setError('Gagal memproses gambar struk.');
+      setStep('capture');
+    }
   }
 
   function handleItemChange(index: number, field: 'name' | 'price', value: string) {
@@ -91,20 +151,30 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
             </div>
 
             <div className="flex w-full flex-col gap-2.5">
-              <button
-                aria-label="Ambil foto struk"
-                onClick={() => handleScan('data:image/png;base64,mockdata')}
-                className="w-full rounded-input bg-accent py-3 font-inter text-sm font-bold text-onAccent"
-              >
-                Ambil foto struk
-              </button>
+              <label className="w-full rounded-input bg-accent py-3 text-center font-inter text-sm font-bold text-onAccent cursor-pointer">
+                <span>Ambil foto struk</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  aria-label="Ambil foto struk"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </label>
               <label className="w-full rounded-input border border-border bg-surface py-3 text-center font-inter text-sm font-semibold text-text cursor-pointer">
                 <span>Pilih dari galeri</span>
-                <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
               </label>
             </div>
           </div>
         )}
+
 
         {/* Step 2: Loading */}
         {step === 'loading' && (

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api, type CurrentUser } from '../lib/api';
 import BottomNavAppLevel from '../components/BottomNavAppLevel';
+import { getStoredTheme, setStoredTheme, type ThemeMode } from '../lib/theme';
+
 
 type AuthStage = 'checking' | 'needsEmail' | 'linkSent' | 'authenticated';
 
@@ -8,9 +10,15 @@ export default function ProfilePlaceholderScreen() {
   const [authStage, setAuthStage] = useState<AuthStage>('checking');
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [email, setEmail] = useState('');
-  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system');
+  const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function handleThemeChange(mode: ThemeMode) {
+    setTheme(mode);
+    setStoredTheme(mode);
+  }
+
 
   useEffect(() => {
     api
@@ -116,9 +124,10 @@ export default function ProfilePlaceholderScreen() {
                     name="theme"
                     value={mode}
                     checked={theme === mode}
-                    onChange={() => setTheme(mode)}
+                    onChange={() => handleThemeChange(mode)}
                     className="accent-accent"
                   />
+
                 </label>
               ))}
             </div>

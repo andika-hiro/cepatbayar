@@ -1,11 +1,17 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
+import { getStoredTheme, setStoredTheme, type ThemeMode } from '../lib/theme';
 
 export default function PengaturanScreen() {
   const { publicId } = useParams<{ publicId: string }>();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system');
+  const [theme, setTheme] = useState<ThemeMode>(() => getStoredTheme());
+
+  function handleThemeChange(mode: ThemeMode) {
+    setTheme(mode);
+    setStoredTheme(mode);
+  }
 
   if (!publicId) return null;
 
@@ -36,13 +42,14 @@ export default function PengaturanScreen() {
                 name="theme"
                 value={mode}
                 checked={theme === mode}
-                onChange={() => setTheme(mode)}
+                onChange={() => handleThemeChange(mode)}
                 className="accent-accent"
               />
             </label>
           ))}
         </div>
       </div>
+
 
       <button
         onClick={() => navigate(`/t/${publicId}/pengaturan/anggota`)}

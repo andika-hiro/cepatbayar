@@ -17,8 +17,10 @@ describe('OcrScanSheet', () => {
     const onApply = vi.fn();
     render(<OcrScanSheet isOpen={true} onClose={() => {}} onApply={onApply} />);
 
-    // Capture step shutter click
-    fireEvent.click(screen.getByLabelText('Ambil foto struk'));
+    // Capture step file upload
+    const file = new File(['mock image content'], 'receipt.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Ambil foto struk'), { target: { files: [file] } });
+
 
     // Loading step and advance to draft step
     await waitFor(() => {
