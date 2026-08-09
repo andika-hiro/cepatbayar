@@ -80,15 +80,23 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
       setStep('loading');
       setError(null);
       const res: OcrScanResult = await api.scanReceipt(imageData);
-      setItems(res.items || []);
+      const validItems = res.items && res.items.length > 0 ? res.items : [{ name: '', price: 0 }];
+      setItems(validItems);
       setTaxPercent(res.taxPercent || 0);
       setServicePercent(res.servicePercent || 0);
+      if (res.isFallback) {
+        setError('⚠️ AI kesulitan membaca otomatis struk ini. Silakan periksa atau isi rincian item secara manual.');
+      }
       setStep('draft');
     } catch {
-      setError('Gagal membaca struk. Coba foto ulang dengan pencahayaan lebih terang.');
-      setStep('capture');
+      setItems([{ name: '', price: 0 }]);
+      setTaxPercent(0);
+      setServicePercent(0);
+      setError('⚠️ Gagal memproses AI. Silakan masukkan rincian item struk secara manual di bawah.');
+      setStep('draft');
     }
   }
+
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

@@ -8,31 +8,34 @@ export interface OcrResult {
   taxPercent: number;
   servicePercent: number;
   total: number;
+  isFallback?: boolean;
 }
 
 const MODELS_TO_TRY = ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'];
 
-const RECEIPT_PROMPT = `Anda adalah sistem OCR khusus membaca struk/nota belanja di Indonesia.
-Tugas Anda: Analisis foto struk ini dan ekstrak data barang dan nominal rupiah secara SANGAT AKURAT.
+const RECEIPT_PROMPT = `Anda adalah OCR kecerdasan buatan serba bisa untuk membaca segala jenis struk belanja & nota di Indonesia (struk kasir thermal, nota warung, struk Indomaret/Alfamart, bill restoran, struk GoFood/GrabFood).
 
-Aturan Penting Ekstraksi Nominal Rupiah:
-1. Setiap nominal angka di Indonesia menggunakan titik sebagai pemisah ribuan (misal 15.000 = 15000, 120.500 = 120500). Hapus semua titik pemisah ribuan dan abaikan desimal 00 di belakang koma.
-2. Untuk setiap baris barang/makanan/minuman:
-   - "name": Nama item makanan/minuman/barang.
-   - "price": Nominal TOTAL harga untuk baris item tersebut dalam Rupiah (integer positif tanpa titik/koma). Jika ada qty > 1 (misal "2 x Nasi Goreng @ 15.000 = 30.000"), gunakan total harga baris (30000).
-3. "taxPercent": Persentase Pajak (PB1 / VAT / Tax) jika ada di struk dalam angka bulat (misal 10 untuk 10%). Jika pajak dalam rupiah (misal Rp 5.000 dari subtotal Rp 50.000), hitung persentasenya (10). Jika tidak ada, isi 0.
-4. "servicePercent": Persentase Service Charge / Layanan jika ada (misal 5 untuk 5%). Jika tidak ada, isi 0.
-5. "total": Nominal TOTAL AKHIR bayar yang tertera paling bawah di struk (dalam Rupiah integer bulat).
+TUGAS UTAMA: Ekstrak daftar barang/makanan dan nominal harga ke JSON.
 
-Format output HARUS JSON murni tanpa markdown/penjelasan lain:
+PANDUAN EKSTRAKSI HARGA & NOMINAL:
+1. FORMAT RUPIAH: Struk di Indonesia menggunakan titik (.) sebagai pemisah ribuan (contoh: 15.000 = 15000, 150.000 = 150000). Abaikan desimal pasca koma seperti ,00. Hapus semua titik dan simbol Rp.
+2. ITEM & TOTAL HARGA:
+   - "name": Nama ringkas barang/makanan/minuman.
+   - "price": Nominal harga TOTAL untuk baris item tersebut dalam angka bulat Rupiah (contoh: jika tertera "2 Teh Obeng @ 8.000 = 16.000", price = 16000).
+   - Abaikan baris diskon atau gunakan nominal harga bersih (net).
+3. PAJAK & SERVICE CHARGE:
+   - "taxPercent": Persen Pajak (PB1/VAT/Tax) jika ada (misal 10). Jika pajak dalam nominal Rupiah, hitung % terhadap subtotal. Jika tidak ada = 0.
+   - "servicePercent": Persen Service Charge jika ada (misal 5). Jika tidak ada = 0.
+4. "total": Nominal Total Bayar akhir struk dalam Rupiah integer bulat.
+
+BERIKAN HASIL HANYA DALAM FORMAT JSON BERIKUT (TANPA MARKDOWN KODE / TEKS LAIN):
 {
   "items": [
-    { "name": "Nasi Goreng Spesial", "price": 35000 },
-    { "name": "Es Teh Manis", "price": 8000 }
+    { "name": "Nasi Goreng", "price": 25000 }
   ],
-  "taxPercent": 10,
-  "servicePercent": 5,
-  "total": 47300
+  "taxPercent": 0,
+  "servicePercent": 0,
+  "total": 25000
 }`;
 
 function parseImageDataUrl(imageBase64: string): { mimeType: string; data: string } {
@@ -41,6 +44,23 @@ function parseImageDataUrl(imageBase64: string): { mimeType: string; data: strin
     return { mimeType: 'image/jpeg', data: imageBase64 };
   }
   return { mimeType: match[1], data: match[2] };
+}
+
+function extractJsonFromText(text: string): any {
+  const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  try {
+    return JSON.parse(cleanText);
+  } catch {
+    const match = cleanText.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export async function scanReceipt(imageBase64: string): Promise<OcrResult> {
@@ -62,7 +82,6 @@ export async function scanReceipt(imageBase64: string): Promise<OcrResult> {
 
   const { mimeType, data } = parseImageDataUrl(imageBase64);
 
-  let lastError: Error | null = null;
   for (const model of MODELS_TO_TRY) {
     try {
       const response = await fetch(
@@ -76,40 +95,49 @@ export async function scanReceipt(imageBase64: string): Promise<OcrResult> {
                 parts: [{ text: RECEIPT_PROMPT }, { inline_data: { mime_type: mimeType, data } }],
               },
             ],
-            generationConfig: { responseMimeType: 'application/json' },
           }),
         },
       );
 
       if (!response.ok) {
-        lastError = new Error(`Vision LLM (${model}) request failed with status ${response.status}`);
         continue;
       }
 
       const body = await response.json();
       const text = body.candidates?.[0]?.content?.parts?.[0]?.text;
       if (!text) {
-        lastError = new Error(`Vision LLM (${model}) response did not contain a result`);
         continue;
       }
 
-      const cleanJsonStr = text.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const parsed = JSON.parse(cleanJsonStr);
-      return {
-        items: Array.isArray(parsed.items)
-          ? parsed.items.map((i: { name?: string; price?: number }) => ({
-              name: String(i.name || '').trim(),
-              price: Math.max(0, Math.round(Number(i.price) || 0)),
-            }))
-          : [],
-        taxPercent: Math.max(0, Number(parsed.taxPercent) || 0),
-        servicePercent: Math.max(0, Number(parsed.servicePercent) || 0),
-        total: Math.max(0, Math.round(Number(parsed.total) || 0)),
-      };
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+      const parsed = extractJsonFromText(text);
+      if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
+        const validItems = parsed.items
+          .map((i: { name?: string; price?: number }) => ({
+            name: String(i.name || '').trim(),
+            price: Math.max(0, Math.round(Number(i.price) || 0)),
+          }))
+          .filter((i: { name: string; price: number }) => i.name.length > 0 || i.price > 0);
+
+        if (validItems.length > 0) {
+          return {
+            items: validItems,
+            taxPercent: Math.max(0, Number(parsed.taxPercent) || 0),
+            servicePercent: Math.max(0, Number(parsed.servicePercent) || 0),
+            total: Math.max(0, Math.round(Number(parsed.total) || 0)),
+          };
+        }
+      }
+    } catch {
+      // Continue to next model
     }
   }
 
-  throw lastError || new Error('Vision LLM scan failed for all models');
+  // Graceful fallback response if all models fail to parse thermal/unusual receipts
+  return {
+    items: [{ name: '', price: 0 }],
+    taxPercent: 0,
+    servicePercent: 0,
+    total: 0,
+    isFallback: true,
+  };
 }

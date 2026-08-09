@@ -213,7 +213,9 @@ export interface OcrScanResult {
   taxPercent: number;
   servicePercent: number;
   total: number;
+  isFallback?: boolean;
 }
+
 
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
