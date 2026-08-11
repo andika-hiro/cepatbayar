@@ -17,9 +17,9 @@ export default function BottomNavTripLevel({ publicId, active, onAddClick }: Bot
     `font-inter text-[10px] ${isActive ? 'font-semibold text-accent' : 'font-medium text-sub'}`;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 flex items-center justify-around border-t border-border bg-surface px-4 pb-[18px] pt-[10px] z-40">
-      {/* Ringkasan */}
-      <Link to={`/t/${publicId}/ringkasan`} className="flex flex-col items-center gap-[3px]">
+    <div className="fixed inset-x-0 bottom-0 grid grid-cols-5 items-center border-t border-border bg-surface px-2 pb-[14px] pt-[8px] z-40">
+      {/* 1. Ringkasan */}
+      <Link to={`/t/${publicId}/ringkasan`} className="flex flex-col items-center justify-center gap-[3px] text-center">
         <svg
           aria-hidden="true"
           width="21"
@@ -39,8 +39,8 @@ export default function BottomNavTripLevel({ publicId, active, onAddClick }: Bot
         <span className={textClass(isRingkasan)}>Ringkasan</span>
       </Link>
 
-      {/* Riwayat */}
-      <Link to={`/t/${publicId}/riwayat`} className="flex flex-col items-center gap-[3px]">
+      {/* 2. Riwayat */}
+      <Link to={`/t/${publicId}/riwayat`} className="flex flex-col items-center justify-center gap-[3px] text-center">
         <svg
           aria-hidden="true"
           width="21"
@@ -60,17 +60,19 @@ export default function BottomNavTripLevel({ publicId, active, onAddClick }: Bot
         <span className={textClass(isRiwayat)}>Riwayat</span>
       </Link>
 
-      {/* FAB Add Button */}
-      <button
-        onClick={onAddClick}
-        aria-label="Tambah sub trip"
-        className="flex h-12 w-12 flex-none -translate-y-3 items-center justify-center rounded-full bg-accent font-inter text-lg font-bold text-onAccent shadow-md hover:opacity-90 active:scale-95 transition-transform"
-      >
-        +
-      </button>
+      {/* 3. FAB Add Button (Perfect 50% Center) */}
+      <div className="flex flex-col items-center justify-center">
+        <button
+          onClick={onAddClick}
+          aria-label="Tambah sub trip"
+          className="flex h-12 w-12 flex-none -translate-y-3 items-center justify-center rounded-full bg-accent font-inter text-lg font-bold text-onAccent shadow-md hover:opacity-90 active:scale-95 transition-transform"
+        >
+          +
+        </button>
+      </div>
 
-      {/* Saldo */}
-      <Link to={`/t/${publicId}/saldo`} className="flex flex-col items-center gap-[3px]">
+      {/* 4. Saldo */}
+      <Link to={`/t/${publicId}/saldo`} className="flex flex-col items-center justify-center gap-[3px] text-center">
         <svg
           aria-hidden="true"
           width="21"
@@ -89,8 +91,8 @@ export default function BottomNavTripLevel({ publicId, active, onAddClick }: Bot
         <span className={textClass(isSaldo)}>Saldo</span>
       </Link>
 
-      {/* Profil */}
-      <Link to={`/t/${publicId}/pengaturan`} className="flex flex-col items-center gap-[3px]">
+      {/* 5. Profil */}
+      <Link to={`/t/${publicId}/pengaturan`} className="flex flex-col items-center justify-center gap-[3px] text-center">
         <svg
           aria-hidden="true"
           width="21"
