@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import { getStoredTheme, setStoredTheme, type ThemeMode } from '../lib/theme';
+import AppLogo from '../components/AppLogo';
+
 
 export default function PengaturanScreen() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -24,7 +26,11 @@ export default function PengaturanScreen() {
         >
           ← Ringkasan
         </button>
-        <div className="font-manrope text-[17px] font-extrabold text-text">Pengaturan</div>
+        <div className="flex items-center gap-1.5 font-manrope text-[17px] font-extrabold text-text">
+          <AppLogo size={22} />
+          <span>Pengaturan</span>
+        </div>
+
         <div className="w-[60px]" />
       </div>
 

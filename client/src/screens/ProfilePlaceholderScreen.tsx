@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, type CurrentUser } from '../lib/api';
 import BottomNavAppLevel from '../components/BottomNavAppLevel';
 import { getStoredTheme, setStoredTheme, type ThemeMode } from '../lib/theme';
+import AppLogo from '../components/AppLogo';
 
 
 type AuthStage = 'checking' | 'needsEmail' | 'linkSent' | 'authenticated';
@@ -59,8 +60,13 @@ export default function ProfilePlaceholderScreen() {
   if (authStage === 'checking') return null;
 
   return (
+
     <div className="flex min-h-screen flex-col gap-5 px-5 pb-[100px] pt-4">
-      <div className="font-manrope text-[21px] font-extrabold text-text">Profil & Akun</div>
+      <div className="flex items-center gap-2.5">
+        <AppLogo size={32} />
+        <div className="font-manrope text-[21px] font-extrabold text-text">Profil & Akun</div>
+      </div>
+
 
       {authStage === 'needsEmail' || authStage === 'linkSent' ? (
         <div className="flex flex-col gap-4 rounded-card border border-border bg-surface p-5">

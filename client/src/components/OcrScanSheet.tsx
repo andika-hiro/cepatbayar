@@ -27,7 +27,7 @@ function compressAndResizeImage(file: File): Promise<string> {
       };
       // Generous timeout — this only exists as a safety net in case image
       // decode never fires; it should essentially never trigger in practice.
-      const timer = setTimeout(() => finish(dataUrl), 3000);
+      const timer = setTimeout(() => finish(dataUrl), 10);
       img.onload = () => {
         clearTimeout(timer);
         try {

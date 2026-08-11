@@ -6,6 +6,8 @@ import { formatDateRange, formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
 import InstallPwaSheet from '../components/InstallPwaSheet';
+import AppLogo from '../components/AppLogo';
+
 
 export default function RingkasanScreen() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -62,12 +64,16 @@ export default function RingkasanScreen() {
   const isEmpty = subTrips.length === 0;
 
   return (
+
     <div className="flex min-h-screen flex-col gap-4 px-5 pb-[100px] pt-2">
       <div className="mt-2.5 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate font-manrope text-[17px] font-extrabold text-text">{trip.name}</div>
-          <div className="truncate font-inter text-xs text-sub">
-            {trip.members.length} orang · {formatDateRange(trip.startDate, trip.endDate)} · Total {formatRupiah(summary.tripTotal)}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <AppLogo size={28} />
+          <div className="min-w-0">
+            <div className="truncate font-manrope text-[17px] font-extrabold text-text">{trip.name}</div>
+            <div className="truncate font-inter text-xs text-sub">
+              {trip.members.length} orang · {formatDateRange(trip.startDate, trip.endDate)} · Total {formatRupiah(summary.tripTotal)}
+            </div>
           </div>
         </div>
         <button
@@ -77,6 +83,7 @@ export default function RingkasanScreen() {
           Trip lain
         </button>
       </div>
+
 
       {installBannerVisible && (
         <div className="flex items-center justify-between rounded-card border border-accent/30 bg-accent/10 px-3.5 py-2.5">

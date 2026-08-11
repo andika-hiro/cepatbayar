@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
+import AppLogo from '../components/AppLogo';
 import { addJoinedTripId } from '../lib/localTrips';
 
 type AuthStage = 'checking' | 'needsEmail' | 'linkSent' | 'authenticated';
@@ -103,9 +104,13 @@ export default function NewTripScreen() {
   return (
     <div className="flex min-h-screen flex-col gap-4 px-[22px] pb-8 pt-2">
       <div className="mt-3.5">
-        <div className="font-manrope text-[21px] font-extrabold text-text">Buat trip baru</div>
+        <div className="flex items-center gap-2 font-manrope text-[21px] font-extrabold text-text">
+          <AppLogo size={28} />
+          <span>Buat trip baru</span>
+        </div>
         <div className="mt-1.5 font-inter text-[13px] text-sub">Isi info dasar, anggota bisa ditambah kapan aja nanti.</div>
       </div>
+
 
       <label className="flex flex-col gap-1.5">
         <span className="font-inter text-xs font-semibold text-sub">Nama trip</span>

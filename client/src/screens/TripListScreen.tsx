@@ -5,6 +5,8 @@ import { getJoinedTripIds } from '../lib/localTrips';
 import TripCard from '../components/TripCard';
 import BottomNavAppLevel from '../components/BottomNavAppLevel';
 
+import AppLogo from '../components/AppLogo';
+
 export default function TripListScreen() {
   const navigate = useNavigate();
   const [trips, setTrips] = useState<TripSummary[]>([]);
@@ -48,14 +50,10 @@ export default function TripListScreen() {
   return (
     <div className="flex min-h-screen flex-col gap-4 px-5 pb-[100px] pt-2">
       <div className="mt-2.5 flex items-center gap-2.5">
-        <div className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px] bg-accent">
-          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-bg)" strokeWidth={2.2}>
-            <path d="M12 2v6" />
-            <path d="M5 10h14l-1.5 10a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z" />
-          </svg>
-        </div>
+        <AppLogo size={34} />
         <div className="font-manrope text-[17px] font-extrabold text-text">Cepatkan Bayar</div>
       </div>
+
 
       <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3 py-2.5">
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-sub)" strokeWidth={2}>

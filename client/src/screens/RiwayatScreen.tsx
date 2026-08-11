@@ -6,6 +6,8 @@ import { formatRupiah } from '../lib/format';
 import { categoryLabel } from '../lib/categories';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
+import AppLogo from '../components/AppLogo';
+
 
 export default function RiwayatScreen() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -49,11 +51,16 @@ export default function RiwayatScreen() {
   if (!trip || !subTrips || !publicId || currentMemberId === null) return null;
 
   return (
+
     <div className="flex min-h-screen flex-col gap-3 px-5 pb-[100px] pt-2">
       <div className="mt-2.5">
-        <div className="font-manrope text-lg font-extrabold text-text">Riwayat</div>
+        <div className="flex items-center gap-2 font-manrope text-lg font-extrabold text-text">
+          <AppLogo size={24} />
+          <span>Riwayat</span>
+        </div>
         <div className="mt-1 font-inter text-xs text-sub">Tiap sub trip punya tagihan sendiri, gak digabung sama yang lain.</div>
       </div>
+
 
       {subTrips.length === 0 ? (
         <div className="py-8 text-center font-inter text-[13px] text-sub">Belum ada sub trip.</div>

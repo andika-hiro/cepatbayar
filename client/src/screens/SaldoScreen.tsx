@@ -5,6 +5,8 @@ import { getCurrentMemberId } from '../lib/localTrips';
 import { formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddDepositSheet from '../components/AddDepositSheet';
+import AppLogo from '../components/AppLogo';
+
 
 export default function SaldoScreen() {
   const { publicId } = useParams<{ publicId: string }>();
@@ -66,7 +68,11 @@ export default function SaldoScreen() {
         >
           ← Ringkasan
         </button>
-        <div className="font-manrope text-[17px] font-extrabold text-text">Saldo & deposit</div>
+        <div className="flex items-center gap-1.5 font-manrope text-[17px] font-extrabold text-text">
+          <AppLogo size={22} />
+          <span>Saldo & deposit</span>
+        </div>
+
         <div className="w-[60px]" />
       </div>
 
