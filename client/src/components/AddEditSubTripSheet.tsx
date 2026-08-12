@@ -167,11 +167,9 @@ export default function AddEditSubTripSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg">
-
-
-      <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-
+    <div className="fixed inset-0 z-50 flex h-full w-full flex-col overflow-hidden bg-bg">
+      {/* Header */}
+      <div className="flex flex-none items-center justify-between border-b border-border bg-surface px-5 py-3.5">
         <button onClick={onClose} className="font-inter text-sm text-sub">
           Batal
         </button>
@@ -181,7 +179,8 @@ export default function AddEditSubTripSheet({
         <div className="w-10" />
       </div>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4 pb-[100px]">
+      {/* Form Content (Scrollable) */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
         <label className="flex flex-col gap-1.5">
           <span className="font-inter text-xs font-semibold text-sub">Keterangan</span>
           <input
@@ -396,14 +395,15 @@ export default function AddEditSubTripSheet({
         {error && <div className="font-inter text-[12.5px] text-neg">{error}</div>}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-surface px-5 py-3.5 z-50">
-
+      {/* Footer (Pinned Save Button) */}
+      <div className="flex-none border-t border-border bg-surface px-5 py-3.5 pb-[max(14px,env(safe-area-inset-bottom))]">
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={!canSubmit || submitting}
           className="w-full rounded-[14px] bg-accent px-4 py-3.5 font-inter text-sm font-bold text-onAccent disabled:opacity-50"
         >
-          Simpan pengeluaran
+          {submitting ? 'Menyimpan...' : 'Simpan pengeluaran'}
         </button>
       </div>
 
@@ -417,4 +417,3 @@ export default function AddEditSubTripSheet({
     </div>
   );
 }
-
