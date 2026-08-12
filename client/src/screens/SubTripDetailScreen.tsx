@@ -129,8 +129,13 @@ export default function SubTripDetailScreen() {
               <div>
                 <div className="font-inter text-sm font-semibold text-text">{d.name}</div>
                 <div className={`font-inter text-[11px] ${d.settled ? 'text-pos' : 'text-neg'}`}>
-                  {d.settled ? 'Lunas' : 'Belum transfer'}
+                  {d.settled ? (d.coveredByDeposit ? 'Lunas (Deposit)' : 'Lunas') : 'Belum transfer'}
                 </div>
+                {d.depositNote && (
+                  <div className="mt-0.5 font-inter text-[10.5px] font-medium text-accent">
+                    {d.depositNote}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-end gap-1.5">
@@ -147,6 +152,7 @@ export default function SubTripDetailScreen() {
           </div>
         ))}
       </div>
+
 
       {canModify && (
         <div className="flex flex-col gap-2 border-t border-border pt-3">

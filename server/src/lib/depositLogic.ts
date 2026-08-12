@@ -22,6 +22,9 @@ export interface RawDeposit {
 
 export interface AnnotatedDebt extends RawDebt {
   depositNote?: string;
+  coveredByDeposit?: boolean;
+  appliedDepositAmount?: number;
+  remainingUnpaidAmount?: number;
 }
 
 export interface DepositSummary {
@@ -39,7 +42,7 @@ function formatRp(val: number): string {
 }
 
 export function computeDynamicDeposits(
-  unsettledDebts: RawDebt[],
+  allDebts: RawDebt[],
   depositsList: RawDeposit[]
 ): { annotatedDebts: AnnotatedDebt[]; depositSummaries: DepositSummary[] } {
   // Aggregate total deposits per pair (fromMemberId -> toMemberId)
@@ -54,7 +57,7 @@ export function computeDynamicDeposits(
   }
 
   // Sort debts chronologically (date, subTripId, debt id)
-  const sortedDebts = [...unsettledDebts].sort((a, b) => {
+  const sortedDebts = [...allDebts].sort((a, b) => {
     if (a.date !== b.date) return a.date.localeCompare(b.date);
     if (a.subTripId !== b.subTripId) return a.subTripId - b.subTripId;
     return a.id - b.id;
@@ -65,17 +68,24 @@ export function computeDynamicDeposits(
     const pool = poolMap.get(key);
 
     if (!pool || pool.remaining <= 0) {
-      return { ...debt };
+      return { ...debt, remainingUnpaidAmount: debt.settled ? 0 : debt.amount };
     }
 
     const applied = Math.min(debt.amount, pool.remaining);
     pool.remaining -= applied;
 
+    const isFullyCovered = applied >= debt.amount;
+    const remainingUnpaidAmount = Math.max(0, debt.amount - applied);
+
     const depositNote = `Rp${formatRp(applied)} dipotong dari deposit ${debt.debtorName} → ${debt.creditorName} (sisa Rp${formatRp(pool.remaining)})`;
 
     return {
       ...debt,
+      settled: isFullyCovered || Boolean(debt.settled),
       depositNote,
+      coveredByDeposit: isFullyCovered,
+      appliedDepositAmount: applied,
+      remainingUnpaidAmount: debt.settled ? 0 : remainingUnpaidAmount,
     };
   });
 

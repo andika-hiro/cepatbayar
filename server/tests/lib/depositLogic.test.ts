@@ -40,4 +40,20 @@ describe('computeDynamicDeposits', () => {
     expect(result.depositSummaries[0].remainingBalance).toBe(70000);
     expect(result.depositSummaries[0].low).toBe(false);
   });
+
+  it('auto-settles debt fully covered by deposit and maintains remaining balance even if debt was marked settled', () => {
+    const rawDebts = [
+      { id: 1, subTripId: 10, subTripName: 'Makan 1', debtorId: 2, debtorName: 'Hiro', creditorId: 1, creditorName: 'Ando', amount: 100000, date: '2026-08-01', settled: true },
+    ];
+    const rawDeposits = [
+      { id: 100, fromMemberId: 2, fromName: 'Hiro', toMemberId: 1, toName: 'Ando', amount: 1000000 },
+    ];
+
+    const result = computeDynamicDeposits(rawDebts, rawDeposits);
+
+    expect(result.annotatedDebts[0].settled).toBe(true);
+    expect(result.annotatedDebts[0].coveredByDeposit).toBe(true);
+    expect(result.depositSummaries[0].remainingBalance).toBe(900000);
+  });
 });
+

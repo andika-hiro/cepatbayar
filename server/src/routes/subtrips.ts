@@ -3,10 +3,12 @@ import { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { db } from '../db/client';
-import { debts, subTrips, tripMembers, subTripItems, subTripItemParticipants } from '../db/schema';
+import { debts, subTrips, tripMembers, subTripItems, subTripItemParticipants, deposits } from '../db/schema';
 import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
 import { computeEqualShares, reconcileDebts } from '../lib/splitLogic';
 import { computeItemBasedShares } from '../lib/itemSplitLogic';
+import { computeDynamicDeposits } from '../lib/depositLogic';
+
 import { isoDateSchema } from '../lib/validators';
 import { attachUserIfPresent } from '../auth/attachUserIfPresent';
 
@@ -200,18 +202,54 @@ router.get<{ publicId: string }>('/', async (req, res) => {
     return;
   }
 
-  const payerIds = [...new Set(rows.map((r) => r.payerMemberId))];
-  const payers = await db.select().from(tripMembers).where(inArray(tripMembers.id, payerIds));
-  const payerNameById = new Map(payers.map((p) => [p.id, p.name]));
+  const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+  const memberMap = new Map(members.map((p) => [p.id, p.name]));
 
-  const subTripIds = rows.map((r) => r.id);
-  const unsettledRows = await db
-    .select({ subTripId: debts.subTripId })
+  const depositRows = await db.select().from(deposits).where(eq(deposits.tripId, trip.id));
+  const formattedDeposits = depositRows.map((dp) => ({
+    id: dp.id,
+    fromMemberId: dp.fromMemberId,
+    fromName: memberMap.get(dp.fromMemberId) || 'Unknown',
+    toMemberId: dp.toMemberId,
+    toName: memberMap.get(dp.toMemberId) || 'Unknown',
+    amount: dp.amount,
+  }));
+
+  const allDebts = await db
+    .select({
+      id: debts.id,
+      subTripId: debts.subTripId,
+      memberId: debts.memberId,
+      amount: debts.amount,
+      settled: debts.settled,
+      payerMemberId: subTrips.payerMemberId,
+      subTripName: subTrips.name,
+      date: subTrips.date,
+    })
     .from(debts)
-    .where(and(inArray(debts.subTripId, subTripIds), eq(debts.settled, false)));
+    .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
+    .where(eq(subTrips.tripId, trip.id));
+
+  const rawDebts = allDebts.map((d) => ({
+    id: d.id,
+    subTripId: d.subTripId,
+    subTripName: d.subTripName,
+    debtorId: d.memberId,
+    debtorName: memberMap.get(d.memberId) || 'Unknown',
+    creditorId: d.payerMemberId,
+    creditorName: memberMap.get(d.payerMemberId) || 'Unknown',
+    amount: d.amount,
+    date: d.date,
+    settled: d.settled,
+  }));
+
+  const { annotatedDebts } = computeDynamicDeposits(rawDebts, formattedDeposits);
+
   const unsettledCountBySubTrip = new Map<number, number>();
-  for (const r of unsettledRows) {
-    unsettledCountBySubTrip.set(r.subTripId, (unsettledCountBySubTrip.get(r.subTripId) ?? 0) + 1);
+  for (const d of annotatedDebts) {
+    if (!d.settled) {
+      unsettledCountBySubTrip.set(d.subTripId, (unsettledCountBySubTrip.get(d.subTripId) ?? 0) + 1);
+    }
   }
 
   res.json(
@@ -221,7 +259,7 @@ router.get<{ publicId: string }>('/', async (req, res) => {
       category: r.category,
       date: r.date,
       payerMemberId: r.payerMemberId,
-      payerName: payerNameById.get(r.payerMemberId) ?? '',
+      payerName: memberMap.get(r.payerMemberId) ?? '',
       amount: r.amount,
       unsettledCount: unsettledCountBySubTrip.get(r.id) ?? 0,
     })),
@@ -231,15 +269,52 @@ router.get<{ publicId: string }>('/', async (req, res) => {
 router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, res) => {
   const loaded = await loadScopedSubTrip(req, res);
   if (!loaded) return;
-  const { subTrip } = loaded;
+  const { trip, subTrip } = loaded;
 
-  const [payer] = await db.select().from(tripMembers).where(eq(tripMembers.id, subTrip.payerMemberId));
-  const debtRows = await db.select().from(debts).where(eq(debts.subTripId, subTrip.id));
-  const debtMemberIds = [...new Set(debtRows.map((d) => d.memberId))];
-  const debtMembers = debtMemberIds.length
-    ? await db.select().from(tripMembers).where(inArray(tripMembers.id, debtMemberIds))
-    : [];
-  const nameById = new Map(debtMembers.map((m) => [m.id, m.name]));
+  const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+  const memberMap = new Map(members.map((m) => [m.id, m.name]));
+  const payer = members.find((m) => m.id === subTrip.payerMemberId);
+
+  const depositRows = await db.select().from(deposits).where(eq(deposits.tripId, trip.id));
+  const formattedDeposits = depositRows.map((dp) => ({
+    id: dp.id,
+    fromMemberId: dp.fromMemberId,
+    fromName: memberMap.get(dp.fromMemberId) || 'Unknown',
+    toMemberId: dp.toMemberId,
+    toName: memberMap.get(dp.toMemberId) || 'Unknown',
+    amount: dp.amount,
+  }));
+
+  const allDebts = await db
+    .select({
+      id: debts.id,
+      subTripId: debts.subTripId,
+      memberId: debts.memberId,
+      amount: debts.amount,
+      settled: debts.settled,
+      payerMemberId: subTrips.payerMemberId,
+      subTripName: subTrips.name,
+      date: subTrips.date,
+    })
+    .from(debts)
+    .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
+    .where(eq(subTrips.tripId, trip.id));
+
+  const rawDebts = allDebts.map((d) => ({
+    id: d.id,
+    subTripId: d.subTripId,
+    subTripName: d.subTripName,
+    debtorId: d.memberId,
+    debtorName: memberMap.get(d.memberId) || 'Unknown',
+    creditorId: d.payerMemberId,
+    creditorName: memberMap.get(d.payerMemberId) || 'Unknown',
+    amount: d.amount,
+    date: d.date,
+    settled: d.settled,
+  }));
+
+  const { annotatedDebts } = computeDynamicDeposits(rawDebts, formattedDeposits);
+  const subTripAnnotatedDebts = annotatedDebts.filter((d) => d.subTripId === subTrip.id);
 
   let items: {
     id: number;
@@ -291,9 +366,18 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     taxPercent: Number(subTrip.taxPercent),
     servicePercent: Number(subTrip.servicePercent),
     items,
-    debts: debtRows.map((d) => ({ id: d.id, memberId: d.memberId, name: nameById.get(d.memberId) ?? '', amount: d.amount, settled: d.settled })),
+    debts: subTripAnnotatedDebts.map((d) => ({
+      id: d.id,
+      memberId: d.debtorId,
+      name: d.debtorName,
+      amount: d.amount,
+      settled: d.settled,
+      depositNote: d.depositNote,
+      coveredByDeposit: d.coveredByDeposit,
+    })),
   });
 });
+
 
 router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserIfPresent, async (req, res) => {
   const loaded = await loadScopedSubTrip(req, res);

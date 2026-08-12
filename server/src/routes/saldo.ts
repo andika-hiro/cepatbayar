@@ -43,43 +43,18 @@ router.get('/:publicId/saldo', async (req, res) => {
     .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
     .where(eq(subTrips.tripId, trip.id));
 
-  const rollupMap = new Map<number, { received: number; owed: number }>();
-  for (const m of members) rollupMap.set(m.id, { received: 0, owed: 0 });
-
-  for (const d of allDebts) {
-    if (!d.settled) {
-      const p = rollupMap.get(d.payerMemberId);
-      if (p) p.received += d.amount;
-      const o = rollupMap.get(d.memberId);
-      if (o) o.owed += d.amount;
-    }
-  }
-
-  const rollupMembers = members.map(m => {
-    const r = rollupMap.get(m.id) || { received: 0, owed: 0 };
-    const net = r.received - r.owed;
-    return {
-      memberId: m.id,
-      name: m.name,
-      rollup: net,
-      status: net > 0 ? 'pos' : net < 0 ? 'neg' : 'zero',
-    };
-  });
-
-  // Fetch unsettled debts for dynamic deposit calculation
-  const unsettledRaw = allDebts
-    .filter(d => !d.settled)
-    .map(d => ({
-      id: d.id,
-      subTripId: d.subTripId,
-      subTripName: d.subTripName,
-      debtorId: d.memberId,
-      debtorName: memberMap.get(d.memberId)?.name || 'Unknown',
-      creditorId: d.payerMemberId,
-      creditorName: memberMap.get(d.payerMemberId)?.name || 'Unknown',
-      amount: d.amount,
-      date: d.date,
-    }));
+  const allDebtsRaw = allDebts.map(d => ({
+    id: d.id,
+    subTripId: d.subTripId,
+    subTripName: d.subTripName,
+    debtorId: d.memberId,
+    debtorName: memberMap.get(d.memberId)?.name || 'Unknown',
+    creditorId: d.payerMemberId,
+    creditorName: memberMap.get(d.payerMemberId)?.name || 'Unknown',
+    amount: d.amount,
+    date: d.date,
+    settled: d.settled,
+  }));
 
   const depositRows = await db
     .select()
@@ -95,17 +70,43 @@ router.get('/:publicId/saldo', async (req, res) => {
     amount: dp.amount,
   }));
 
-  const dynamicResult = computeDynamicDeposits(unsettledRaw, formattedDeposits);
+  const dynamicResult = computeDynamicDeposits(allDebtsRaw, formattedDeposits);
 
-  const unsettledDebtsWithAccounts = dynamicResult.annotatedDebts.map(d => ({
-    ...d,
-    accounts: (accountsByMember.get(d.creditorId) || []).map(a => ({
-      id: a.id,
-      label: a.label,
-      accountNumber: a.accountNumber,
-      isDefault: a.isDefault,
-    })),
-  }));
+  const rollupMap = new Map<number, { received: number; owed: number }>();
+  for (const m of members) rollupMap.set(m.id, { received: 0, owed: 0 });
+
+  for (const d of dynamicResult.annotatedDebts) {
+    if (!d.settled) {
+      const unpaidAmount = d.remainingUnpaidAmount !== undefined ? d.remainingUnpaidAmount : d.amount;
+      const p = rollupMap.get(d.creditorId);
+      if (p) p.received += unpaidAmount;
+      const o = rollupMap.get(d.debtorId);
+      if (o) o.owed += unpaidAmount;
+    }
+  }
+
+  const rollupMembers = members.map(m => {
+    const r = rollupMap.get(m.id) || { received: 0, owed: 0 };
+    const net = r.received - r.owed;
+    return {
+      memberId: m.id,
+      name: m.name,
+      rollup: net,
+      status: net > 0 ? 'pos' : net < 0 ? 'neg' : 'zero',
+    };
+  });
+
+  const unsettledDebtsWithAccounts = dynamicResult.annotatedDebts
+    .filter(d => !d.settled)
+    .map(d => ({
+      ...d,
+      accounts: (accountsByMember.get(d.creditorId) || []).map(a => ({
+        id: a.id,
+        label: a.label,
+        accountNumber: a.accountNumber,
+        isDefault: a.isDefault,
+      })),
+    }));
 
   res.json({
     rollupMembers,
@@ -113,6 +114,7 @@ router.get('/:publicId/saldo', async (req, res) => {
     deposits: dynamicResult.depositSummaries,
   });
 });
+
 
 // GET /api/trips/:publicId/settled-debts
 router.get('/:publicId/settled-debts', async (req, res) => {

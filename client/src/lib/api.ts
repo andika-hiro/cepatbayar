@@ -64,7 +64,10 @@ export interface DebtItem {
   name: string;
   amount: number;
   settled: boolean;
+  depositNote?: string;
+  coveredByDeposit?: boolean;
 }
+
 
 export type SplitMode = 'total' | 'per_item';
 
