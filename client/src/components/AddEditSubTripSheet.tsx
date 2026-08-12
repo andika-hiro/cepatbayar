@@ -167,7 +167,8 @@ export default function AddEditSubTripSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-20 flex flex-col bg-bg">
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg">
+
 
       <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
 
@@ -395,7 +396,8 @@ export default function AddEditSubTripSheet({
         {error && <div className="font-inter text-[12.5px] text-neg">{error}</div>}
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-surface px-5 py-3.5">
+      <div className="fixed inset-x-0 bottom-0 border-t border-border bg-surface px-5 py-3.5 z-50">
+
         <button
           onClick={handleSubmit}
           disabled={!canSubmit || submitting}
