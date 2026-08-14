@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, type SaldoData, type TripDetail } from '../lib/api';
+import { api, type DepositHistoryItem, type SaldoData, type TripDetail } from '../lib/api';
 import { getCurrentMemberId } from '../lib/localTrips';
 import { formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
@@ -47,6 +47,19 @@ export default function SaldoScreen() {
       alert('Gagal memperbarui status pelunasan');
     }
   }
+
+  async function handleDeleteDeposit(deposit: DepositHistoryItem) {
+    if (!publicId) return;
+    const confirm = window.confirm(`Hapus catatan deposit ${formatRupiah(deposit.amount)} dari ${deposit.fromName} ke ${deposit.toName}?`);
+    if (!confirm) return;
+    try {
+      await api.deleteDeposit(publicId, deposit.id);
+      load();
+    } catch {
+      alert('Gagal menghapus deposit. Coba lagi.');
+    }
+  }
+
 
   if (error) {
     return (
@@ -213,34 +226,73 @@ export default function SaldoScreen() {
             Belum ada deposit antar-anggota.
           </div>
         ) : (
-          saldoData.deposits.map((dep, idx) => (
-            <div key={idx} className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
-              <div className="flex items-center justify-between">
-                <div className="font-inter text-xs font-semibold text-text">
-                  {dep.fromName} → {dep.toName}
+          <div className="flex flex-col gap-2.5">
+            {saldoData.deposits.map((dep, idx) => (
+              <div key={idx} className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
+                <div className="flex items-center justify-between">
+                  <div className="font-inter text-xs font-semibold text-text">
+                    {dep.fromName} → {dep.toName}
+                  </div>
+                  <div className="font-mono text-xs font-bold text-text">
+                    Sisa {formatRupiah(dep.remainingBalance)} (total {formatRupiah(dep.totalAmount)})
+                  </div>
                 </div>
-                <div className="font-mono text-xs font-bold text-text">
-                  Sisa {formatRupiah(dep.remainingBalance)} (total {formatRupiah(dep.totalAmount)})
+
+                {dep.low && (
+                  <div className="flex items-center justify-between rounded-md bg-neg/10 px-3 py-2 font-inter text-xs text-neg">
+                    <span>Saldo deposit menipis — kirim reminder?</span>
+                    <a
+                      href={`https://wa.me/?text=Halo%20${encodeURIComponent(dep.fromName)},%20saldo%20deposit%20kamu%20ke%20${encodeURIComponent(dep.toName)}%20sudah%20menipis/habis.`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded bg-neg px-2 py-1 font-bold text-white"
+                    >
+                      Kirim WA
+                    </a>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Riwayat / Rincian Catatan Deposit Individual dengan Tombol Hapus */}
+            {saldoData.depositHistory && saldoData.depositHistory.length > 0 && (
+              <div className="mt-1 flex flex-col gap-2">
+                <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+                  Rincian catatan deposit
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {saldoData.depositHistory.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between gap-3 rounded-card border border-border bg-surface px-3.5 py-2.5"
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="font-inter text-xs font-semibold text-text">
+                          {item.fromName} → {item.toName}: <span className="font-mono font-bold text-accent">{formatRupiah(item.amount)}</span>
+                        </div>
+                        {item.proofNote && (
+                          <div className="font-inter text-[11px] text-sub">
+                            {item.proofNote}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDeposit(item)}
+                        className="rounded-input border border-neg/30 bg-neg/10 px-2.5 py-1 font-inter text-[11px] font-bold text-neg hover:bg-neg/20"
+                        title="Hapus deposit"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              {dep.low && (
-                <div className="flex items-center justify-between rounded-md bg-neg/10 px-3 py-2 font-inter text-xs text-neg">
-                  <span>Saldo deposit menipis — kirim reminder?</span>
-                  <a
-                    href={`https://wa.me/?text=Halo%20${encodeURIComponent(dep.fromName)},%20saldo%20deposit%20kamu%20ke%20${encodeURIComponent(dep.toName)}%20sudah%20menipis/habis.`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="rounded bg-neg px-2 py-1 font-bold text-white"
-                  >
-                    Kirim WA
-                  </a>
-                </div>
-              )}
-            </div>
-          ))
+            )}
+          </div>
         )}
       </div>
+
 
       {/* Footer Link */}
       <button

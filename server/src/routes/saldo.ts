@@ -59,7 +59,8 @@ router.get('/:publicId/saldo', async (req, res) => {
   const depositRows = await db
     .select()
     .from(deposits)
-    .where(eq(deposits.tripId, trip.id));
+    .where(eq(deposits.tripId, trip.id))
+    .orderBy(desc(deposits.createdAt));
 
   const formattedDeposits = depositRows.map(dp => ({
     id: dp.id,
@@ -68,6 +69,17 @@ router.get('/:publicId/saldo', async (req, res) => {
     toMemberId: dp.toMemberId,
     toName: memberMap.get(dp.toMemberId)?.name || 'Unknown',
     amount: dp.amount,
+  }));
+
+  const depositHistory = depositRows.map(dp => ({
+    id: dp.id,
+    fromMemberId: dp.fromMemberId,
+    fromName: memberMap.get(dp.fromMemberId)?.name || 'Unknown',
+    toMemberId: dp.toMemberId,
+    toName: memberMap.get(dp.toMemberId)?.name || 'Unknown',
+    amount: dp.amount,
+    proofNote: dp.proofNote,
+    createdAt: dp.createdAt,
   }));
 
   const dynamicResult = computeDynamicDeposits(allDebtsRaw, formattedDeposits);
@@ -112,8 +124,10 @@ router.get('/:publicId/saldo', async (req, res) => {
     rollupMembers,
     unsettledDebts: unsettledDebtsWithAccounts,
     deposits: dynamicResult.depositSummaries,
+    depositHistory,
   });
 });
+
 
 
 // GET /api/trips/:publicId/settled-debts
@@ -184,4 +198,31 @@ router.post('/:publicId/deposits', async (req, res) => {
   res.status(201).json({ success: true, id: inserted[0].insertId });
 });
 
+// DELETE /api/trips/:publicId/deposits/:depositId
+router.delete('/:publicId/deposits/:depositId', async (req, res) => {
+  const { publicId, depositId } = req.params;
+  const id = Number(depositId);
+  if (!id || isNaN(id) || id <= 0) {
+    return res.status(400).json({ error: 'Invalid deposit ID' });
+  }
+
+  const tripList = await db.select().from(trips).where(eq(trips.publicId, publicId));
+  if (!tripList.length) return res.status(404).json({ error: 'Trip not found' });
+  const trip = tripList[0];
+
+  const [existing] = await db
+    .select()
+    .from(deposits)
+    .where(and(eq(deposits.id, id), eq(deposits.tripId, trip.id)));
+
+  if (!existing) {
+    return res.status(404).json({ error: 'Deposit not found' });
+  }
+
+  await db.delete(deposits).where(eq(deposits.id, id));
+
+  res.json({ success: true });
+});
+
 export default router;
+

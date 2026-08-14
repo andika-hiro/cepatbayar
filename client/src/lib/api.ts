@@ -175,11 +175,24 @@ export interface DepositSummaryItem {
   low: boolean;
 }
 
+export interface DepositHistoryItem {
+  id: number;
+  fromMemberId: number;
+  fromName: string;
+  toMemberId: number;
+  toName: string;
+  amount: number;
+  proofNote?: string | null;
+  createdAt?: string;
+}
+
 export interface SaldoData {
   rollupMembers: RollupMember[];
   unsettledDebts: UnsettledDebtItem[];
   deposits: DepositSummaryItem[];
+  depositHistory?: DepositHistoryItem[];
 }
+
 
 export interface SettledDebtItem {
   id: number;
@@ -255,7 +268,10 @@ export const api = {
   getSettledDebts: (publicId: string) => request<SettledDebtItem[]>(`/trips/${publicId}/settled-debts`),
   createDeposit: (publicId: string, input: { fromMemberId: number; toMemberId: number; amount: number; proofNote?: string }) =>
     request<{ success: true; id: number }>(`/trips/${publicId}/deposits`, { method: 'POST', body: JSON.stringify(input) }),
+  deleteDeposit: (publicId: string, depositId: number) =>
+    request<{ success: true }>(`/trips/${publicId}/deposits/${depositId}`, { method: 'DELETE' }),
   addTripMember: (publicId: string, name: string) =>
+
     request<{ id: number; name: string }>(`/trips/${publicId}/members`, { method: 'POST', body: JSON.stringify({ name }) }),
   getMemberAccounts: (publicId: string, memberId: number) =>
     request<MemberAccount[]>(`/trips/${publicId}/members/${memberId}/accounts`),
