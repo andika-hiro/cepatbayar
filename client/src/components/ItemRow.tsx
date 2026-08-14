@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatThousands } from '../lib/format';
 
 export interface ItemRowMember {
   id: number;
@@ -88,12 +89,13 @@ export default function ItemRow({
       <div className="flex items-center gap-2 rounded-input border border-border bg-bg px-3.5 py-2.5">
         <span className="font-mono text-sm text-sub">Rp</span>
         <input
-          value={priceText}
-          onChange={(e) => onPriceChange(e.target.value.replace(/[^0-9]/g, ''))}
+          value={formatThousands(priceText)}
+          onChange={(e) => onPriceChange(formatThousands(e.target.value))}
           inputMode="numeric"
           placeholder="0"
           className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
         />
+
       </div>
 
       <div className="flex flex-col gap-1.5">

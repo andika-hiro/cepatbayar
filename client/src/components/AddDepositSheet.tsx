@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { TripMember } from '../lib/api';
+import { formatThousands } from '../lib/format';
+
 
 interface AddDepositSheetProps {
   isOpen: boolean;
@@ -29,7 +31,7 @@ export default function AddDepositSheet({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const numAmount = parseInt(amount, 10);
+    const numAmount = parseInt(amount.replace(/\D/g, ''), 10);
     if (!numAmount || numAmount <= 0) {
       setError('Nominal deposit harus lebih dari 0.');
       return;
@@ -102,14 +104,16 @@ export default function AddDepositSheet({
             <label htmlFor="deposit-amount-input" className="font-inter text-xs font-semibold text-sub">Jumlah (Rp)</label>
             <input
               id="deposit-amount-input"
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              type="text"
+              inputMode="numeric"
+              value={formatThousands(amount)}
+              onChange={(e) => setAmount(formatThousands(e.target.value))}
               placeholder="0"
               className="rounded-input border border-border bg-surface px-3 py-2.5 font-mono text-sm text-text"
               required
             />
           </div>
+
 
           <div className="flex flex-col gap-1">
             <label htmlFor="proof-note-input" className="font-inter text-xs font-semibold text-sub">Catatan / Bukti transfer (opsional)</label>

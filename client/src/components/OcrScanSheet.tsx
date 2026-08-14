@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, type OcrScanResult } from '../lib/api';
-import { formatRupiah } from '../lib/format';
+import { formatRupiah, formatThousands } from '../lib/format';
+
 
 interface OcrScanSheetProps {
   isOpen: boolean;
@@ -123,10 +124,11 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
     if (field === 'name') {
       next[index].name = value;
     } else {
-      next[index].price = parseInt(value, 10) || 0;
+      next[index].price = parseInt(value.replace(/\D/g, ''), 10) || 0;
     }
     setItems(next);
   }
+
 
   function handleAddItem() {
     setItems([...items, { name: '', price: 0 }]);
@@ -218,12 +220,15 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
                     className="flex-1 rounded-input border border-border bg-surface px-3 py-2 font-inter text-sm text-text"
                   />
                   <input
-                    type="number"
-                    value={item.price || ''}
+                    type="text"
+                    inputMode="numeric"
+                    value={formatThousands(item.price)}
                     onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
                     placeholder="Harga"
                     className="w-28 rounded-input border border-border bg-surface px-3 py-2 font-mono text-sm text-text"
                   />
+
+
                   <button
                     type="button"
                     onClick={() => handleRemoveItem(idx)}

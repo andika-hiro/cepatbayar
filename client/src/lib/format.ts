@@ -13,3 +13,10 @@ export function formatRupiah(amount: number): string {
   const formatted = new Intl.NumberFormat('id-ID').format(abs);
   return amount < 0 ? `-Rp${formatted}` : `Rp${formatted}`;
 }
+
+export function formatThousands(val: string | number | undefined | null): string {
+  if (val === undefined || val === null || val === '') return '';
+  const digits = String(val).replace(/\D/g, '');
+  if (!digits) return '';
+  return new Intl.NumberFormat('en-US').format(Number(digits));
+}

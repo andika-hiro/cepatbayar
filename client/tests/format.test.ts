@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateRange, formatRupiah } from '../src/lib/format';
+import { formatDateRange, formatRupiah, formatThousands } from '../src/lib/format';
 
 describe('formatDateRange', () => {
   it('formats a date range with Indonesian month abbreviations', () => {
@@ -18,5 +18,19 @@ describe('formatRupiah', () => {
 
   it('formats a negative amount with the minus sign before Rp', () => {
     expect(formatRupiah(-20000)).toBe('-Rp20.000');
+  });
+});
+
+describe('formatThousands', () => {
+  it('formats numbers and numeric strings with thousands separators', () => {
+    expect(formatThousands(5000)).toBe('5,000');
+    expect(formatThousands(50000)).toBe('50,000');
+    expect(formatThousands('1000000')).toBe('1,000,000');
+  });
+
+  it('handles empty and zero values gracefully', () => {
+    expect(formatThousands('')).toBe('');
+    expect(formatThousands(undefined)).toBe('');
+    expect(formatThousands(0)).toBe('0');
   });
 });
