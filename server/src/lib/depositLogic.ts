@@ -9,6 +9,8 @@ export interface RawDebt {
   amount: number;
   date: string;
   settled?: boolean;
+  settledByMemberId?: number | null;
+  settledByMemberName?: string | null;
 }
 
 export interface RawDeposit {

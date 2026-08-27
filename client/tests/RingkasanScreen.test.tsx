@@ -10,6 +10,8 @@ vi.mock('../src/lib/api', () => ({
     tripDetail: vi.fn(),
     tripSummary: vi.fn(),
     listSubTrips: vi.fn(),
+    getSaldoData: vi.fn().mockResolvedValue(null),
+    getSettledDebts: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -88,7 +90,7 @@ describe('RingkasanScreen — with sub trips', () => {
   it("shows the current member's rollup in the balance card", async () => {
     renderScreen();
     expect(await screen.findByText('Saldo kamu (Budi) — total semua sub trip')).toBeInTheDocument();
-    expect(screen.getByTestId('my-rollup')).toHaveTextContent('Rp20.000');
+    expect(screen.getByTestId('my-rollup')).toHaveTextContent('Rp20,000');
   });
 
   it("shows every member's status in the list", async () => {

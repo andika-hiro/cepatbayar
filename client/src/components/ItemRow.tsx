@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatNumberWithCommas } from '../lib/format';
 
 export interface ItemRowMember {
   id: number;
@@ -13,11 +14,15 @@ export interface ItemRowParticipant {
 interface ItemRowProps {
   index: number;
   name: string;
+  qtyText?: string;
+  unitPriceText?: string;
   priceText: string;
   participants: ItemRowParticipant[];
   members: ItemRowMember[];
   canRemove: boolean;
   onNameChange: (name: string) => void;
+  onQtyChange?: (qtyText: string) => void;
+  onUnitPriceChange?: (unitPriceText: string) => void;
   onPriceChange: (priceText: string) => void;
   onParticipantsChange: (participants: ItemRowParticipant[]) => void;
   onRemove: () => void;
@@ -26,11 +31,15 @@ interface ItemRowProps {
 export default function ItemRow({
   index,
   name,
+  qtyText,
+  unitPriceText,
   priceText,
   participants,
   members,
   canRemove,
   onNameChange,
+  onQtyChange,
+  onUnitPriceChange,
   onPriceChange,
   onParticipantsChange,
   onRemove,
@@ -85,15 +94,43 @@ export default function ItemRow({
         className="rounded-input border border-border bg-bg px-3.5 py-2.5 font-inter text-sm text-text"
       />
 
-      <div className="flex items-center gap-2 rounded-input border border-border bg-bg px-3.5 py-2.5">
-        <span className="font-mono text-sm text-sub">Rp</span>
-        <input
-          value={priceText}
-          onChange={(e) => onPriceChange(e.target.value.replace(/[^0-9]/g, ''))}
-          inputMode="numeric"
-          placeholder="0"
-          className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
-        />
+      <div className="flex items-center gap-2">
+        {onQtyChange && (
+          <div className="flex w-[80px] flex-none items-center gap-1 rounded-input border border-border bg-bg px-2.5 py-2">
+            <span className="font-inter text-xs text-sub">Qty</span>
+            <input
+              value={qtyText ?? '1'}
+              onChange={(e) => onQtyChange(e.target.value.replace(/[^0-9]/g, ''))}
+              inputMode="numeric"
+              placeholder="1"
+              className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
+            />
+          </div>
+        )}
+
+        {onUnitPriceChange && (
+          <div className="flex flex-1 items-center gap-1 rounded-input border border-border bg-bg px-2.5 py-2">
+            <span className="font-mono text-[11px] text-sub">@Rp</span>
+            <input
+              value={unitPriceText ? formatNumberWithCommas(unitPriceText) : ''}
+              onChange={(e) => onUnitPriceChange(e.target.value.replace(/[^0-9]/g, ''))}
+              inputMode="numeric"
+              placeholder="Satuan"
+              className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
+            />
+          </div>
+        )}
+
+        <div className="flex flex-1 items-center gap-1 rounded-input border border-border bg-bg px-2.5 py-2">
+          <span className="font-mono text-[11px] text-sub">Total</span>
+          <input
+            value={priceText ? formatNumberWithCommas(priceText) : ''}
+            onChange={(e) => onPriceChange(e.target.value.replace(/[^0-9]/g, ''))}
+            inputMode="numeric"
+            placeholder="0"
+            className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
+          />
+        </div>
       </div>
 
       <div className="flex flex-col gap-1.5">

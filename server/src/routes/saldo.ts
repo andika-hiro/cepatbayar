@@ -35,6 +35,7 @@ router.get('/:publicId/saldo', async (req, res) => {
       memberId: debts.memberId,
       amount: debts.amount,
       settled: debts.settled,
+      settledByMemberId: debts.settledByMemberId,
       payerMemberId: subTrips.payerMemberId,
       subTripName: subTrips.name,
       date: subTrips.date,
@@ -54,6 +55,8 @@ router.get('/:publicId/saldo', async (req, res) => {
     amount: d.amount,
     date: d.date,
     settled: d.settled,
+    settledByMemberId: d.settledByMemberId,
+    settledByMemberName: d.settledByMemberId ? memberMap.get(d.settledByMemberId)?.name || null : null,
   }));
 
   const depositRows = await db
@@ -112,6 +115,7 @@ router.get('/:publicId/saldo', async (req, res) => {
     rollupMembers,
     unsettledDebts: unsettledDebtsWithAccounts,
     deposits: dynamicResult.depositSummaries,
+    rawDeposits: formattedDeposits,
   });
 });
 
@@ -134,6 +138,7 @@ router.get('/:publicId/settled-debts', async (req, res) => {
       creditorId: subTrips.payerMemberId,
       amount: debts.amount,
       settledAt: debts.settledAt,
+      settledByMemberId: debts.settledByMemberId,
     })
     .from(debts)
     .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
@@ -143,10 +148,14 @@ router.get('/:publicId/settled-debts', async (req, res) => {
   const result = settledList.map(s => ({
     id: s.id,
     subTripName: s.subTripName,
+    debtorId: s.debtorId,
     debtorName: memberMap.get(s.debtorId) || 'Unknown',
+    creditorId: s.creditorId,
     creditorName: memberMap.get(s.creditorId) || 'Unknown',
     amount: s.amount,
     settledAt: s.settledAt,
+    settledByMemberId: s.settledByMemberId,
+    settledByMemberName: s.settledByMemberId ? memberMap.get(s.settledByMemberId) || null : null,
   }));
 
   res.json(result);
@@ -182,6 +191,24 @@ router.post('/:publicId/deposits', async (req, res) => {
   });
 
   res.status(201).json({ success: true, id: inserted[0].insertId });
+});
+
+// DELETE /api/trips/:publicId/deposits/:depositId
+router.delete('/:publicId/deposits/:depositId', async (req, res) => {
+  const { publicId, depositId } = req.params;
+  const depId = parseInt(depositId, 10);
+  if (isNaN(depId)) return res.status(400).json({ error: 'Invalid deposit ID' });
+
+  const tripList = await db.select().from(trips).where(eq(trips.publicId, publicId));
+  if (!tripList.length) return res.status(404).json({ error: 'Trip not found' });
+  const trip = tripList[0];
+
+  const depRows = await db.select().from(deposits).where(and(eq(deposits.id, depId), eq(deposits.tripId, trip.id)));
+  if (!depRows.length) return res.status(404).json({ error: 'Deposit not found' });
+
+  await db.delete(deposits).where(eq(deposits.id, depId));
+
+  res.json({ success: true });
 });
 
 export default router;

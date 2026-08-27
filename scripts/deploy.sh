@@ -11,7 +11,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REMOTE_USER="andikah1"
 REMOTE_HOST="103.59.160.21"
 REMOTE_PORT="22"
-SSH_KEY="$HOME/.ssh/id_ed25519_nyanhosting"
+SSH_KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519_nyanhosting}"
+if [ ! -f "$SSH_KEY" ] && [ -f "$HOME/.ssh/id_ed25519" ]; then
+  SSH_KEY="$HOME/.ssh/id_ed25519"
+fi
 DOMAIN="cb.andikahiro.my.id"
 APP_ROOT="/home/${REMOTE_USER}/${DOMAIN}"
 STAGING_DIR="$(mktemp -d)"

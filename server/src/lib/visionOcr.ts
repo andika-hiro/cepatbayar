@@ -1,5 +1,7 @@
 export interface OcrItem {
   name: string;
+  qty?: number;
+  unitPrice?: number;
   price: number;
 }
 
@@ -24,7 +26,9 @@ PANDUAN EKSTRAKSI HARGA & NOMINAL:
 1. FORMAT RUPIAH: Struk di Indonesia menggunakan titik (.) sebagai pemisah ribuan (contoh: 15.000 = 15000, 150.000 = 150000). Abaikan desimal pasca koma seperti ,00. Hapus semua titik dan simbol Rp.
 2. ITEM & TOTAL HARGA:
    - "name": Nama ringkas barang/makanan/minuman.
-   - "price": Nominal harga TOTAL untuk baris item tersebut dalam angka bulat Rupiah (contoh: jika tertera "2 Teh Obeng @ 8.000 = 16.000", price = 16000).
+   - "qty": Jumlah porsi/unit (contoh: jika "5 Nasi Goreng", qty = 5. Jika tidak ada = 1).
+   - "unitPrice": Harga satuan per unit (contoh: jika 5 x 20.000, unitPrice = 20000. Jika tidak ada = price).
+   - "price": Nominal harga TOTAL untuk baris item tersebut dalam angka bulat Rupiah (contoh: jika tertera "5 Nasi Goreng @ 20.000 = 100.000", price = 100000).
    - Abaikan baris diskon atau gunakan nominal harga bersih (net).
 3. PAJAK & SERVICE CHARGE:
    - "taxPercent": Persen Pajak (PB1/VAT/Tax) jika ada (misal 10). Jika pajak dalam nominal Rupiah, hitung % terhadap subtotal. Jika tidak ada = 0.
@@ -34,11 +38,11 @@ PANDUAN EKSTRAKSI HARGA & NOMINAL:
 BERIKAN HASIL HANYA DALAM FORMAT JSON BERIKUT (TANPA MARKDOWN KODE / TEKS LAIN):
 {
   "items": [
-    { "name": "Nasi Goreng", "price": 25000 }
+    { "name": "Nasi Goreng", "qty": 5, "unitPrice": 20000, "price": 100000 }
   ],
   "taxPercent": 0,
   "servicePercent": 0,
-  "total": 25000
+  "total": 100000
 }`;
 
 function parseImageDataUrl(imageBase64: string): { mimeType: string; data: string } {

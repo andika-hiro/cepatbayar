@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createApp } from '../src/app';
 import { createAuthedUser } from './helpers/auth';
 import { db } from '../src/db/client';
-import { trips, subTrips, debts, tripMembers as tripMembersTable } from '../src/db/schema';
+import { trips, subTrips, debts, deposits, tripMembers as tripMembersTable } from '../src/db/schema';
 import { eq } from 'drizzle-orm';
 
 const app = createApp();
@@ -216,6 +216,43 @@ describe('GET /api/trips/:publicId/summary', () => {
     const budiSummary = res.body.members.find((m: { memberId: number }) => m.memberId === budi.id);
     expect(budiSummary.rollup).toBe(0);
     expect(budiSummary.status).toBe('lunas');
+  });
+
+  it('deducts dynamic deposits from debt rollups in summary', async () => {
+    const { cookie } = await createAuthedUser('summary-deposit@example.com');
+    const createRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip Deposit Summary', destination: 'Bali', startDate: '2026-08-01', endDate: '2026-08-05', members: ['Hiro', 'Ando'],
+    });
+    const { publicId } = createRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const members = await db.select().from(tripMembersTable).where(eq(tripMembersTable.tripId, trip.id));
+    const hiro = members.find((m) => m.name === 'Hiro')!;
+    const ando = members.find((m) => m.name === 'Ando')!;
+
+    await db.insert(deposits).values({
+      tripId: trip.id,
+      fromMemberId: hiro.id,
+      toMemberId: ando.id,
+      amount: 1000000,
+    });
+
+    await db.insert(subTrips).values({
+      tripId: trip.id, name: 'Makan Ando', category: 'makan', date: '2026-08-01',
+      payerMemberId: ando.id, amount: 112000, createdByMemberId: ando.id,
+    });
+    const [subTrip] = await db.select().from(subTrips).where(eq(subTrips.tripId, trip.id));
+    await db.insert(debts).values({ subTripId: subTrip.id, memberId: hiro.id, amount: 112000, settled: false });
+
+    const res = await request(app).get(`/api/trips/${publicId}/summary`);
+    expect(res.status).toBe(200);
+
+    const hiroSummary = res.body.members.find((m: { memberId: number }) => m.memberId === hiro.id);
+    const andoSummary = res.body.members.find((m: { memberId: number }) => m.memberId === ando.id);
+
+    expect(hiroSummary.rollup).toBe(0);
+    expect(hiroSummary.status).toBe('lunas');
+    expect(andoSummary.rollup).toBe(0);
+    expect(andoSummary.status).toBe('lunas');
   });
 
   it('returns 404 for an unknown publicId', async () => {

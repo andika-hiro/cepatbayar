@@ -29,7 +29,7 @@ export default function AddDepositSheet({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    const numAmount = parseInt(amount, 10);
+    const numAmount = parseInt(amount.replace(/[^0-9]/g, ''), 10);
     if (!numAmount || numAmount <= 0) {
       setError('Nominal deposit harus lebih dari 0.');
       return;
@@ -51,6 +51,15 @@ export default function AddDepositSheet({
       setError('Gagal menyimpan deposit.');
       setSubmitting(false);
     }
+  }
+
+  function handleAmountChange(val: string) {
+    const digits = val.replace(/[^0-9]/g, '');
+    if (!digits) {
+      setAmount('');
+      return;
+    }
+    setAmount(parseInt(digits, 10).toLocaleString('en-US'));
   }
 
   return (
@@ -102,9 +111,10 @@ export default function AddDepositSheet({
             <label htmlFor="deposit-amount-input" className="font-inter text-xs font-semibold text-sub">Jumlah (Rp)</label>
             <input
               id="deposit-amount-input"
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => handleAmountChange(e.target.value)}
               placeholder="0"
               className="rounded-input border border-border bg-surface px-3 py-2.5 font-mono text-sm text-text"
               required

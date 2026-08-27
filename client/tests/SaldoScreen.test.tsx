@@ -42,7 +42,7 @@ describe('SaldoScreen', () => {
           creditorId: 1,
           creditorName: 'Adit',
           amount: 15000,
-          depositNote: 'Rp10.000 dipotong dari deposit Budi → Adit (sisa Rp0)',
+          depositNote: 'Rp10,000 dipotong dari deposit Budi → Adit (sisa Rp0)',
           accounts: [{ id: 1, label: 'BCA', accountNumber: '123456789', isDefault: true }],
         },
       ],

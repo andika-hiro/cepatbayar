@@ -136,7 +136,7 @@ describe('AddEditSubTripSheet — edit mode', () => {
       />,
     );
     expect(screen.getByDisplayValue('Makan Malam')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('60000')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('60,000')).toBeInTheDocument();
     // payer (Budi, id 1) participated, so debts (Aji) + payer = 2 checked
     expect(screen.getByText('Dibagi ke (2/3)')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Budi' })).toBeChecked();

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, type SubTripListItem, type TripDetail, type TripSummaryDetail } from '../lib/api';
+import { api, type SaldoData, type SubTripListItem, type TripDetail, type TripSummaryDetail } from '../lib/api';
 import { getCurrentMemberId } from '../lib/localTrips';
 import { formatDateRange, formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
 import InstallPwaSheet from '../components/InstallPwaSheet';
+import ShareTripSheet from '../components/ShareTripSheet';
+import MemberDetailSheet from '../components/MemberDetailSheet';
 import AppLogo from '../components/AppLogo';
 
 
@@ -15,7 +17,10 @@ export default function RingkasanScreen() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [summary, setSummary] = useState<TripSummaryDetail | null>(null);
   const [subTrips, setSubTrips] = useState<SubTripListItem[] | null>(null);
-  const [sheetOpen, setSheetOpen] = useState(false);
+  const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
+  const [subTripSheetOpen, setSubTripSheetOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [installBannerVisible, setInstallBannerVisible] = useState(true);
   const [installSheetOpen, setInstallSheetOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,14 +31,16 @@ export default function RingkasanScreen() {
   async function load() {
     if (!publicId) return;
     try {
-      const [tripData, summaryData, subTripData] = await Promise.all([
+      const [tripData, summaryData, subTripData, saldoDataRes] = await Promise.all([
         api.tripDetail(publicId),
         api.tripSummary(publicId),
         api.listSubTrips(publicId),
+        api.getSaldoData ? api.getSaldoData(publicId).catch(() => null) : Promise.resolve(null),
       ]);
       setTrip(tripData);
       setSummary(summaryData);
       setSubTrips(subTripData);
+      setSaldoData(saldoDataRes);
     } catch {
       setError('Gagal muat ringkasan. Coba refresh halaman.');
     }
@@ -45,7 +52,7 @@ export default function RingkasanScreen() {
   }, [publicId]);
 
   function handleSaved() {
-    setSheetOpen(false);
+    setSubTripSheetOpen(false);
     load();
   }
 
@@ -61,6 +68,8 @@ export default function RingkasanScreen() {
 
   const myName = trip.members.find((m) => m.id === currentMemberId)?.name ?? '';
   const mySummary = summary.members.find((m) => m.memberId === currentMemberId);
+  const myStatus = mySummary?.status as string | undefined;
+  const statusColor = myStatus === 'pos' || myStatus === 'dilunasin' ? 'text-pos' : myStatus === 'neg' || myStatus === 'ngutang' ? 'text-neg' : 'text-text';
   const isEmpty = subTrips.length === 0;
 
   return (
@@ -76,12 +85,21 @@ export default function RingkasanScreen() {
             </div>
           </div>
         </div>
-        <button
-          onClick={() => navigate('/')}
-          className="flex flex-none items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 font-inter text-xs font-semibold text-text"
-        >
-          Trip lain
-        </button>
+        <div className="flex flex-none items-center gap-1.5">
+          <button
+            onClick={() => setShareOpen(true)}
+            className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1.5 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90 active:scale-95 transition-transform"
+          >
+            <span>🔗</span>
+            <span>Bagikan</span>
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-1 rounded-pill border border-border bg-surface px-3 py-1.5 font-inter text-xs font-semibold text-text"
+          >
+            Trip lain
+          </button>
+        </div>
       </div>
 
 
@@ -110,46 +128,86 @@ export default function RingkasanScreen() {
 
 
       {isEmpty ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-          <div className="font-manrope text-base font-bold text-text">Belum ada pengeluaran</div>
-          <div className="max-w-[250px] font-inter text-[13px] leading-relaxed text-sub">
-            Trip ini baru dibuat. Tambah sub trip pertama begitu ada yang nalangin sesuatu.
-          </div>
+        <div className="my-auto flex flex-col items-center justify-center gap-3 text-center">
+          <div className="font-manrope text-base font-extrabold text-text">Belum ada pengeluaran</div>
+          <div className="font-inter text-xs text-sub">Catat pengeluaran pertama dengan menekan tombol + di bawah</div>
           <button
-            onClick={() => setSheetOpen(true)}
-            className="mt-1 rounded-[12px] bg-accent px-[18px] py-[11px] font-inter text-[13px] font-bold text-onAccent"
+            onClick={() => setSubTripSheetOpen(true)}
+            className="rounded-pill bg-accent px-5 py-2.5 font-inter text-xs font-bold text-onAccent shadow-md hover:opacity-90"
           >
             + Tambah pengeluaran pertama
           </button>
         </div>
       ) : (
         <>
-          <div className="rounded-card bg-accent px-4 py-4 text-onAccent">
-            <div className="font-inter text-xs font-medium text-onAccentSoft">Saldo kamu ({myName}) — total semua sub trip</div>
-            <div data-testid="my-rollup" className="mt-1.5 font-mono text-2xl font-semibold">
+          {/* Card Status Saldo Saya */}
+          <div
+            onClick={() => currentMemberId !== null && setSelectedMemberDetail({ id: currentMemberId, name: myName })}
+            className="flex flex-col gap-1 rounded-card border border-border bg-surface p-4 cursor-pointer hover:bg-surfaceAlt transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-inter text-xs font-semibold text-sub">
+                Saldo kamu ({myName}) — total semua sub trip
+              </span>
+              <span className="font-inter text-[11px] font-bold text-accent">Lihat rincian 🔍</span>
+            </div>
+            <div
+              data-testid="my-rollup"
+              className={`font-mono text-2xl font-bold ${statusColor}`}
+            >
               {formatRupiah(mySummary?.rollup ?? 0)}
             </div>
-            <div className="mt-1.5 font-inter text-[11px] text-onAccentSoft">
-              Angka ini rollup aja — tagihan asli tetap per sub trip, lihat di bawah
+            <div className="font-inter text-xs text-sub">
+              {myStatus === 'pos' || myStatus === 'dilunasin'
+                ? 'Total berhak menerima pelunasan dari anggota lain'
+                : myStatus === 'neg' || myStatus === 'ngutang'
+                ? 'Total sisa kewajiban kamu di trip ini'
+                : 'Semua tagihan kamu sudah lunas!'}
             </div>
           </div>
 
+          {/* List Status Semua Anggota */}
           <div className="flex flex-col gap-2">
-            <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">Saldo semua anggota</div>
+            <div className="flex items-center justify-between">
+              <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+                Status anggota ({summary.members.length})
+              </div>
+              <div className="font-inter text-[10.5px] text-sub font-medium">Klik nama untuk rincian 💡</div>
+            </div>
             {summary.members.map((m) => {
-              const statusLabel = m.status === 'dilunasin' ? 'Dilunasin' : m.status === 'ngutang' ? 'Ngutang' : 'Lunas';
-              const statusColor = m.status === 'dilunasin' ? 'text-pos' : m.status === 'ngutang' ? 'text-neg' : 'text-sub';
+              const statusStr = m.status as string;
+              const isPos = statusStr === 'pos' || statusStr === 'dilunasin' || m.rollup > 0;
+              const isNeg = statusStr === 'neg' || statusStr === 'ngutang' || m.rollup < 0;
+              const isZero = !isPos && !isNeg;
+              const memberName = trip.members.find((tm) => tm.id === m.memberId)?.name ?? m.name ?? '';
+
               return (
-                <div key={m.memberId} className="flex items-center justify-between rounded-card border border-border bg-surface px-3.5 py-3">
+                <div
+                  key={m.memberId}
+                  onClick={() => setSelectedMemberDetail({ id: m.memberId, name: memberName })}
+                  className="flex items-center justify-between gap-3 rounded-card border border-border bg-surface px-3.5 py-3 cursor-pointer hover:bg-surfaceAlt active:scale-[0.99] transition-all"
+                >
                   <div className="flex items-center gap-2.5">
                     <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-surfaceAlt font-manrope text-xs font-bold text-text">
-                      {m.name.trim().charAt(0).toUpperCase() || '?'}
+                      {memberName.trim().charAt(0).toUpperCase() || '?'}
                     </div>
-                    <div className="font-inter text-sm font-semibold text-text">{m.name}</div>
+                    <div>
+                      <div className="font-inter text-sm font-semibold text-text">{memberName}</div>
+                      <div
+                        className={`font-inter text-[11px] ${
+                          isPos ? 'text-pos' : isNeg ? 'text-neg' : 'text-sub'
+                        }`}
+                      >
+                        {isPos ? 'Dilunasin' : isNeg ? 'Ngutang' : 'Lunas'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className={`font-inter text-[11px] font-medium ${statusColor}`}>{statusLabel}</div>
-                    <div className={`font-mono text-[13px] font-semibold ${statusColor}`}>{formatRupiah(m.rollup)}</div>
+                  <div
+                    className={`font-mono text-sm font-bold ${
+                      isPos ? 'text-pos' : isNeg ? 'text-neg' : 'text-sub'
+                    }`}
+                  >
+                    {isZero ? 'Rp0' : formatRupiah(Math.abs(m.rollup))}
                   </div>
                 </div>
               );
@@ -158,22 +216,22 @@ export default function RingkasanScreen() {
 
           <button
             onClick={() => navigate(`/t/${publicId}/riwayat`)}
-            className="rounded-input border border-border bg-surface px-4 py-3 text-center font-inter text-[13px] font-semibold text-accent"
+            className="mt-1 text-center font-inter text-xs font-semibold text-sub"
           >
             Lihat semua tagihan per sub trip →
           </button>
         </>
       )}
 
-      <BottomNavTripLevel publicId={publicId} active="ringkasan" onAddClick={() => setSheetOpen(true)} />
+      <BottomNavTripLevel publicId={publicId} active="ringkasan" onAddClick={() => setSubTripSheetOpen(true)} />
 
-      {sheetOpen && currentMemberId !== null && (
+      {subTripSheetOpen && currentMemberId !== null && (
         <AddEditSubTripSheet
           publicId={publicId}
           members={trip.members}
           currentMemberId={currentMemberId}
           mode="create"
-          onClose={() => setSheetOpen(false)}
+          onClose={() => setSubTripSheetOpen(false)}
           onSaved={handleSaved}
         />
       )}
@@ -184,7 +242,23 @@ export default function RingkasanScreen() {
           onClose={() => setInstallSheetOpen(false)}
         />
       )}
+
+      <ShareTripSheet
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        tripName={trip.name}
+        publicId={publicId}
+      />
+
+      <MemberDetailSheet
+        isOpen={Boolean(selectedMemberDetail)}
+        onClose={() => setSelectedMemberDetail(null)}
+        publicId={publicId}
+        memberId={selectedMemberDetail?.id ?? 0}
+        memberName={selectedMemberDetail?.name ?? ''}
+        saldoData={saldoData}
+        onRefresh={load}
+      />
     </div>
   );
 }
-

@@ -5,7 +5,10 @@ import { getCurrentMemberId } from '../lib/localTrips';
 import { formatRupiah } from '../lib/format';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddDepositSheet from '../components/AddDepositSheet';
+import ShareTripSheet from '../components/ShareTripSheet';
+import MemberDetailSheet from '../components/MemberDetailSheet';
 import AppLogo from '../components/AppLogo';
+import SwipeToConfirm from '../components/SwipeToConfirm';
 
 
 export default function SaldoScreen() {
@@ -14,6 +17,8 @@ export default function SaldoScreen() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
   const [depositSheetOpen, setDepositSheetOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -41,10 +46,21 @@ export default function SaldoScreen() {
   async function handleToggleSettled(subTripId: number, debtId: number, currentSettled: boolean) {
     if (!publicId) return;
     try {
-      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled);
+      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled, currentMemberId);
       load();
     } catch {
       alert('Gagal memperbarui status pelunasan');
+    }
+  }
+
+  async function handleDeleteDeposit(depositId: number, fromName: string, amount: number) {
+    if (!publicId) return;
+    if (!confirm(`Hapus deposit dari ${fromName} sebesar ${formatRupiah(amount)}?`)) return;
+    try {
+      await api.deleteDeposit(publicId, depositId);
+      load();
+    } catch {
+      alert('Gagal menghapus deposit');
     }
   }
 
@@ -72,22 +88,32 @@ export default function SaldoScreen() {
           <AppLogo size={22} />
           <span>Saldo & deposit</span>
         </div>
-
-        <div className="w-[60px]" />
+        <button
+          onClick={() => setShareOpen(true)}
+          className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90"
+        >
+          <span>🔗 Bagikan</span>
+        </button>
       </div>
 
       {/* Section 1: Saldo Semua Anggota (Rollup) */}
       <div className="flex flex-col gap-2">
-        <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
-          Saldo semua anggota (rollup informasional)
+        <div className="flex items-center justify-between">
+          <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+            Saldo semua anggota (rollup informasional)
+          </div>
+          <div className="font-inter text-[10.5px] font-medium text-sub">Klik nama untuk rincian 💡</div>
         </div>
         <div className="flex flex-col gap-2">
           {saldoData.rollupMembers.map((m) => {
             const statusLabel = m.status === 'pos' ? 'Dilunasin' : m.status === 'neg' ? 'Ngutang' : 'Lunas';
             const statusColor = m.status === 'pos' ? 'text-pos' : m.status === 'neg' ? 'text-neg' : 'text-sub';
             return (
-
-              <div key={m.memberId} className="flex items-center justify-between rounded-card border border-border bg-surface px-3.5 py-3">
+              <div
+                key={m.memberId}
+                onClick={() => setSelectedMemberDetail({ id: m.memberId, name: m.name })}
+                className="flex items-center justify-between rounded-card border border-border bg-surface px-3.5 py-3 cursor-pointer hover:bg-surfaceAlt active:scale-[0.99] transition-all"
+              >
                 <div className="flex items-center gap-2.5">
                   <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-surfaceAlt font-manrope text-xs font-bold text-text">
                     {m.name.trim().charAt(0).toUpperCase() || '?'}
@@ -129,6 +155,8 @@ export default function SaldoScreen() {
           </div>
         ) : (
           saldoData.unsettledDebts.map((debt) => {
+            const isMeDebtor = debt.debtorId === currentMemberId;
+            const isMeCreditor = debt.creditorId === currentMemberId;
             const activeAccId = selectedAccounts[debt.id];
             const selectedAccount = debt.accounts.find((a) => a.id === activeAccId) || debt.accounts.find((a) => a.isDefault) || debt.accounts[0];
 
@@ -181,13 +209,15 @@ export default function SaldoScreen() {
                   )}
                 </div>
 
-                {/* Action button */}
-                <button
-                  onClick={() => handleToggleSettled(debt.subTripId, debt.id, false)}
-                  className="rounded-pill border border-accent px-4 py-2 font-inter text-xs font-bold text-accent"
-                >
-                  Tandai sudah transfer
-                </button>
+                {/* Action swipe component */}
+                <SwipeToConfirm
+                  label={isMeCreditor ? 'Geser untuk tandai lunas 👉' : isMeDebtor ? 'Geser jika sudah transfer 👉' : 'Geser untuk tandai lunas 👉'}
+                  confirmedLabel="✓ Lunas"
+                  isSettled={Boolean((debt as any).settled)}
+                  onConfirm={() => handleToggleSettled(debt.subTripId, debt.id, false)}
+                  onReset={() => handleToggleSettled(debt.subTripId, debt.id, true)}
+                  className="mt-1"
+                />
               </div>
             );
           })
@@ -240,6 +270,27 @@ export default function SaldoScreen() {
             </div>
           ))
         )}
+
+        {saldoData.rawDeposits && saldoData.rawDeposits.length > 0 && (
+          <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2.5">
+            <div className="font-inter text-[11px] font-semibold text-sub">Riwayat Deposit (dapat dihapus)</div>
+            {saldoData.rawDeposits.map((rd) => (
+              <div key={rd.id} className="flex items-center justify-between rounded-input border border-border bg-bg px-3 py-2">
+                <div className="flex flex-col font-inter text-xs text-text">
+                  <span>{rd.fromName} → {rd.toName}</span>
+                  <span className="font-mono text-[11px] text-sub">{formatRupiah(rd.amount)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteDeposit(rd.id, rd.fromName, rd.amount)}
+                  className="font-inter text-xs font-semibold text-neg"
+                >
+                  Hapus
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Footer Link */}
@@ -265,6 +316,23 @@ export default function SaldoScreen() {
           }}
         />
       )}
+
+      <ShareTripSheet
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        tripName={trip.name}
+        publicId={publicId}
+      />
+
+      <MemberDetailSheet
+        isOpen={Boolean(selectedMemberDetail)}
+        onClose={() => setSelectedMemberDetail(null)}
+        publicId={publicId}
+        memberId={selectedMemberDetail?.id ?? 0}
+        memberName={selectedMemberDetail?.name ?? ''}
+        saldoData={saldoData}
+        onRefresh={load}
+      />
     </div>
   );
 }

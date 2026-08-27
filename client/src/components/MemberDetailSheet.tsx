@@ -1,0 +1,248 @@
+import { useEffect, useState } from 'react';
+import { api, type SaldoData, type SettledDebtItem } from '../lib/api';
+import { formatRupiah } from '../lib/format';
+import { getCurrentMemberId } from '../lib/localTrips';
+import SwipeToConfirm from './SwipeToConfirm';
+
+interface MemberDetailSheetProps {
+  isOpen: boolean;
+  onClose: () => void;
+  publicId: string;
+  memberId: number;
+  memberName: string;
+  saldoData: SaldoData | null;
+  onRefresh?: () => void;
+}
+
+export default function MemberDetailSheet({
+  isOpen,
+  onClose,
+  publicId,
+  memberId,
+  memberName,
+  saldoData,
+  onRefresh,
+}: MemberDetailSheetProps) {
+  const [settledDebts, setSettledDebts] = useState<SettledDebtItem[]>([]);
+  const [loadingSettled, setLoadingSettled] = useState(false);
+
+  const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
+
+  async function handleToggleSettled(subTripId: number, debtId: number, currentSettled: boolean) {
+    if (!publicId) return;
+    try {
+      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled, currentMemberId);
+      if (onRefresh) onRefresh();
+    } catch {
+      alert('Gagal memperbarui status pelunasan');
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen && publicId) {
+      setLoadingSettled(true);
+      api
+        .getSettledDebts(publicId)
+        .then((data) => setSettledDebts(data))
+        .catch(() => {})
+        .finally(() => setLoadingSettled(false));
+    }
+  }, [isOpen, publicId]);
+
+  if (!isOpen) return null;
+
+  const memberRollup = saldoData?.rollupMembers.find((m) => m.memberId === memberId);
+  const rollupVal = memberRollup?.rollup ?? 0;
+  const isPos = rollupVal > 0;
+  const isNeg = rollupVal < 0;
+
+  // Unsettled debts where member is debtor (owes money)
+  const myDebtsToPay = saldoData?.unsettledDebts.filter((d) => d.debtorId === memberId) ?? [];
+  // Unsettled debts where member is creditor (nalingin)
+  const myDebtsToReceive = saldoData?.unsettledDebts.filter((d) => d.creditorId === memberId) ?? [];
+
+  // Settled debts for this member
+  const mySettledDebts = settledDebts.filter(
+    (d) => d.debtorId === memberId || d.creditorId === memberId || d.debtorName === memberName || d.creditorName === memberName
+  );
+
+  // Deposits involving this member
+  const myDeposits = saldoData?.deposits.filter((dp) => dp.fromMemberId === memberId || dp.toMemberId === memberId) ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
+      {/* Backdrop */}
+      <div className="absolute inset-0" onClick={onClose} />
+
+      {/* Sheet Content */}
+      <div className="relative flex max-h-[85vh] w-full max-w-lg flex-col rounded-t-card sm:rounded-card border border-border bg-surface shadow-xl animate-in slide-in-from-bottom duration-200">
+        {/* Header */}
+        <div className="flex flex-none items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-accent/15 font-manrope text-base font-bold text-accent">
+              {memberName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="font-manrope text-base font-extrabold text-text">{memberName}</div>
+              <div className="font-inter text-xs text-sub">Rincian tagihan & pelunasan</div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-surfaceAlt font-inter text-sm font-semibold text-sub hover:text-text"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Body Scrollable */}
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+          {/* Total Rollup Card */}
+          <div className="flex items-center justify-between rounded-card border border-border bg-bg p-4">
+            <div className="flex flex-col gap-0.5">
+              <span className="font-inter text-xs font-semibold text-sub">Saldo Rollup</span>
+              <span className={`font-inter text-xs font-medium ${isPos ? 'text-pos' : isNeg ? 'text-neg' : 'text-sub'}`}>
+                {isPos ? 'Berhak Menerima' : isNeg ? 'Kewajiban Membayar' : 'Semua Lunas'}
+              </span>
+            </div>
+            <div className={`font-mono text-xl font-bold ${isPos ? 'text-pos' : isNeg ? 'text-neg' : 'text-text'}`}>
+              {formatRupiah(rollupVal)}
+            </div>
+          </div>
+
+          {/* Section: Debts to Pay (Kewajiban Membayar) */}
+          <div className="flex flex-col gap-2">
+            <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+              Kewajiban Membayar ({myDebtsToPay.length})
+            </div>
+            {myDebtsToPay.length === 0 ? (
+              <div className="rounded-input border border-border bg-bg px-3.5 py-3 text-center font-inter text-xs text-sub">
+                Tidak ada kewajiban belum bayar 👍
+              </div>
+            ) : (
+              myDebtsToPay.map((d) => (
+                <div key={d.id} className="flex flex-col gap-2 rounded-card border border-border bg-bg p-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="font-inter text-sm font-semibold text-text">
+                      {d.subTripName}
+                    </div>
+                    <div className="font-mono text-sm font-bold text-neg">
+                      {formatRupiah(d.amount)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between font-inter text-xs text-sub">
+                    <span>Bayar ke: <strong className="text-text">{d.creditorName}</strong></span>
+                    <span>{d.date}</span>
+                  </div>
+                  {d.depositNote && (
+                    <div className="rounded bg-accent/10 px-2.5 py-1 font-inter text-[11px] text-accent">
+                      💡 {d.depositNote}
+                    </div>
+                  )}
+                  <SwipeToConfirm
+                    label="Geser jika sudah bayar 👉"
+                    confirmedLabel="✓ Lunas"
+                    isSettled={false}
+                    onConfirm={() => handleToggleSettled(d.subTripId, d.id, false)}
+                    onReset={() => handleToggleSettled(d.subTripId, d.id, true)}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Section: Debts to Receive (Hak Menerima / Nalingin) */}
+          <div className="flex flex-col gap-2">
+            <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+              Hak Menerima / Nalingin ({myDebtsToReceive.length})
+            </div>
+            {myDebtsToReceive.length === 0 ? (
+              <div className="rounded-input border border-border bg-bg px-3.5 py-3 text-center font-inter text-xs text-sub">
+                Tidak ada tagihan ke orang lain
+              </div>
+            ) : (
+              myDebtsToReceive.map((d) => (
+                <div key={d.id} className="flex flex-col gap-2 rounded-card border border-border bg-bg p-3.5">
+                  <div className="flex items-center justify-between">
+                    <div className="font-inter text-sm font-semibold text-text">
+                      {d.subTripName}
+                    </div>
+                    <div className="font-mono text-sm font-bold text-pos">
+                      +{formatRupiah(d.amount)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between font-inter text-xs text-sub">
+                    <span>Ditagih ke: <strong className="text-text">{d.debtorName}</strong></span>
+                    <span>{d.date}</span>
+                  </div>
+                  {d.depositNote && (
+                    <div className="rounded bg-accent/10 px-2.5 py-1 font-inter text-[11px] text-accent">
+                      💡 {d.depositNote}
+                    </div>
+                  )}
+                  <SwipeToConfirm
+                    label="Geser tandai lunas 👉"
+                    confirmedLabel="✓ Lunas"
+                    isSettled={false}
+                    onConfirm={() => handleToggleSettled(d.subTripId, d.id, false)}
+                    onReset={() => handleToggleSettled(d.subTripId, d.id, true)}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Section: Deposit / Simpanan */}
+          {myDeposits.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+                Deposit Antar-Anggota
+              </div>
+              {myDeposits.map((dep, idx) => (
+                <div key={idx} className="flex items-center justify-between rounded-card border border-border bg-bg p-3 font-inter text-xs">
+                  <span className="text-text">{dep.fromName} → {dep.toName}</span>
+                  <span className="font-mono font-bold text-text">
+                    Sisa {formatRupiah(dep.remainingBalance)} (total {formatRupiah(dep.totalAmount)})
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Section: Settled History */}
+          <div className="flex flex-col gap-2">
+            <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+              Riwayat Sudah Lunas ({mySettledDebts.length})
+            </div>
+            {loadingSettled ? (
+              <div className="text-center font-inter text-xs text-sub py-2">Memuat riwayat...</div>
+            ) : mySettledDebts.length === 0 ? (
+              <div className="rounded-input border border-border bg-bg px-3.5 py-3 text-center font-inter text-xs text-sub">
+                Belum ada riwayat pelunasan
+              </div>
+            ) : (
+              mySettledDebts.map((d) => (
+                <div key={d.id} className="flex items-center justify-between rounded-card border border-border bg-bg px-3.5 py-2.5">
+                  <div className="flex flex-col font-inter text-xs">
+                    <span className="font-semibold text-text">{d.subTripName}</span>
+                    <span className="text-sub">{d.debtorName} → {d.creditorName}</span>
+                    {d.settledByMemberName && (
+                      <span className="font-inter text-[10px] text-accent font-medium mt-0.5">
+                        Dilunaskan oleh {d.settledByMemberName}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="font-mono text-xs font-bold text-pos">✓ {formatRupiah(d.amount)}</span>
+                    <span className="font-inter text-[10px] text-sub">{d.settledAt ? d.settledAt.substring(0, 10) : 'Lunas'}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

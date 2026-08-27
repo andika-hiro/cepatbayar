@@ -292,6 +292,7 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
       memberId: debts.memberId,
       amount: debts.amount,
       settled: debts.settled,
+      settledByMemberId: debts.settledByMemberId,
       payerMemberId: subTrips.payerMemberId,
       subTripName: subTrips.name,
       date: subTrips.date,
@@ -311,6 +312,8 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     amount: d.amount,
     date: d.date,
     settled: d.settled,
+    settledByMemberId: d.settledByMemberId,
+    settledByMemberName: d.settledByMemberId ? memberMap.get(d.settledByMemberId) || null : null,
   }));
 
   const { annotatedDebts } = computeDynamicDeposits(rawDebts, formattedDeposits);
@@ -372,6 +375,8 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
       name: d.debtorName,
       amount: d.amount,
       settled: d.settled,
+      settledByMemberId: d.settledByMemberId,
+      settledByMemberName: d.settledByMemberName,
       depositNote: d.depositNote,
       coveredByDeposit: d.coveredByDeposit,
     })),
@@ -515,7 +520,10 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
   res.status(200).json({ ok: true });
 });
 
-const toggleDebtSchema = z.object({ settled: z.boolean() });
+const toggleDebtSchema = z.object({
+  settled: z.boolean(),
+  settledByMemberId: z.number().int().positive().optional(),
+});
 
 router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTripId/debts/:debtId', async (req, res) => {
   const loaded = await loadScopedSubTrip(req, res);
@@ -539,9 +547,18 @@ router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTrip
     return;
   }
 
+  const claimedMemberIdHeader = req.header('X-Member-Id');
+  const settledByMemberId = parsed.data.settled
+    ? (parsed.data.settledByMemberId ?? (claimedMemberIdHeader ? Number(claimedMemberIdHeader) : null))
+    : null;
+
   await db
     .update(debts)
-    .set({ settled: parsed.data.settled, settledAt: parsed.data.settled ? new Date() : null })
+    .set({
+      settled: parsed.data.settled,
+      settledAt: parsed.data.settled ? new Date() : null,
+      settledByMemberId: settledByMemberId,
+    })
     .where(eq(debts.id, debtId));
 
   res.status(200).json({ ok: true });

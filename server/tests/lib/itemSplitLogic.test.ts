@@ -36,7 +36,7 @@ describe('computeItemBasedShares', () => {
     expect(result.shares.get(4)).toBe(30000);
   });
 
-  it('computes service charge once on the pre-tax subtotal, split evenly among the union of original participants (never redirected)', () => {
+  it('computes service charge once on the pre-tax subtotal, split evenly among effective debtors (redirected participants pass their service charge share to their target)', () => {
     const result = computeItemBasedShares(
       [
         { name: 'Nasi Goreng', price: 50000, participants: [{ memberId: 2 }] },
@@ -44,13 +44,14 @@ describe('computeItemBasedShares', () => {
       ],
       0, 10, 1,
     );
-    // subtotal = 100000; serviceCharge = ceil(100000*10/100) = 10000; 2 unique original participants (2, 3) -> share = ceil(10000/2) = 5000
+    // subtotal = 100000; serviceCharge = ceil(100000*10/100) = 10000; 2 unique effective debtors (2, 4) -> share = ceil(10000/2) = 5000
     expect(result.serviceCharge).toBe(10000);
-    // member 2: their own item share (50000, sole participant of that item, not the payer) + service share (5000)
+    // member 2: item share (50000) + service share (5000) = 55000
     expect(result.shares.get(2)).toBe(55000);
-    // member 3's item debt was redirected to 4, but member 3 (not 4) still owes their own service-charge share
-    expect(result.shares.get(3)).toBe(5000);
-    expect(result.shares.get(4)).toBe(50000); // the redirected item share only, no service charge
+    // member 3's item debt and service charge share are redirected to 4, so member 3 owes nothing
+    expect(result.shares.get(3)).toBeUndefined();
+    // member 4: redirected item share (50000) + service share (5000) = 55000
+    expect(result.shares.get(4)).toBe(55000);
   });
 
   it('aggregates multiple items owed to the same debtor into one total', () => {
@@ -89,5 +90,40 @@ describe('computeItemBasedShares', () => {
       0, 0, 1,
     );
     expect(result.serviceCharge).toBe(0);
+  });
+
+  it('correctly attributes service charge per item portion when a participant redirects their bill', () => {
+    const result = computeItemBasedShares(
+      [
+        {
+          name: 'Menu Utama',
+          price: 900000,
+          participants: [
+            { memberId: 1 },
+            { memberId: 2 },
+            { memberId: 3, billedToMemberId: 2 },
+            { memberId: 4 },
+            { memberId: 5 },
+            { memberId: 6 },
+            { memberId: 7 },
+            { memberId: 8 },
+          ],
+        },
+      ],
+      10, 5, 1,
+    );
+    expect(result.subtotal).toBe(900000);
+    expect(result.taxTotal).toBe(90000);
+    expect(result.serviceCharge).toBe(45000);
+    expect(result.grandTotal).toBe(1035000);
+
+    expect(result.shares.get(4)).toBe(129375);
+    expect(result.shares.get(5)).toBe(129375);
+    expect(result.shares.get(6)).toBe(129375);
+    expect(result.shares.get(7)).toBe(129375);
+    expect(result.shares.get(8)).toBe(129375);
+
+    expect(result.shares.get(3)).toBeUndefined();
+    expect(result.shares.get(2)).toBe(258750);
   });
 });

@@ -10,6 +10,18 @@ export function formatDateRange(startDate: string, endDate: string): string {
 
 export function formatRupiah(amount: number): string {
   const abs = Math.abs(amount);
-  const formatted = new Intl.NumberFormat('id-ID').format(abs);
+  const formatted = abs.toLocaleString('en-US');
   return amount < 0 ? `-Rp${formatted}` : `Rp${formatted}`;
+}
+
+export function formatNumberWithCommas(amount: number | string): string {
+  const numText = String(amount).replace(/[^0-9]/g, '');
+  if (!numText) return '';
+  const num = parseInt(numText, 10);
+  if (isNaN(num)) return '';
+  return num.toLocaleString('en-US');
+}
+
+export function parseFormattedNumber(text: string): string {
+  return text.replace(/[^0-9]/g, '');
 }

@@ -59,6 +59,7 @@ export const debts = mysqlTable('debts', {
   amount: int('amount').notNull(),
   settled: boolean('settled').notNull().default(false),
   settledAt: timestamp('settled_at'),
+  settledByMemberId: int('settled_by_member_id').references(() => tripMembers.id),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

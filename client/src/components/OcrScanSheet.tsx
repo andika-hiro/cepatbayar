@@ -2,10 +2,17 @@ import { useState } from 'react';
 import { api, type OcrScanResult } from '../lib/api';
 import { formatRupiah } from '../lib/format';
 
+interface OcrDraftItem {
+  name: string;
+  qty?: number;
+  unitPrice?: number;
+  price: number;
+}
+
 interface OcrScanSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  onApply: (draft: { items: { name: string; price: number }[]; taxPercent: number; servicePercent: number }) => void;
+  onApply: (draft: { items: OcrDraftItem[]; taxPercent: number; servicePercent: number }) => void;
 }
 
 function compressAndResizeImage(file: File): Promise<string> {
@@ -74,7 +81,7 @@ function compressAndResizeImage(file: File): Promise<string> {
 
 export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetProps) {
   const [step, setStep] = useState<'capture' | 'loading' | 'draft'>('capture');
-  const [items, setItems] = useState<{ name: string; price: number }[]>([]);
+  const [items, setItems] = useState<OcrDraftItem[]>([]);
   const [taxPercent, setTaxPercent] = useState(10);
   const [servicePercent, setServicePercent] = useState(5);
   const [error, setError] = useState<string | null>(null);
@@ -118,18 +125,34 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
     }
   }
 
-  function handleItemChange(index: number, field: 'name' | 'price', value: string) {
+  function handleItemChange(index: number, field: 'name' | 'qty' | 'unitPrice' | 'price', value: string) {
     const next = [...items];
+    const curr = { ...next[index] };
     if (field === 'name') {
-      next[index].name = value;
-    } else {
-      next[index].price = parseInt(value, 10) || 0;
+      curr.name = value;
+    } else if (field === 'qty') {
+      const q = parseInt(value, 10) || 1;
+      curr.qty = q;
+      const up = curr.unitPrice || (curr.price > 0 ? Math.round(curr.price / q) : 0);
+      curr.unitPrice = up;
+      curr.price = q * up;
+    } else if (field === 'unitPrice') {
+      const up = parseInt(value, 10) || 0;
+      const q = curr.qty || 1;
+      curr.unitPrice = up;
+      curr.price = q * up;
+    } else if (field === 'price') {
+      const p = parseInt(value, 10) || 0;
+      const q = curr.qty || 1;
+      curr.price = p;
+      curr.unitPrice = p > 0 ? Math.round(p / q) : 0;
     }
+    next[index] = curr;
     setItems(next);
   }
 
   function handleAddItem() {
-    setItems([...items, { name: '', price: 0 }]);
+    setItems([...items, { name: '', qty: 1, unitPrice: 0, price: 0 }]);
   }
 
   function handleRemoveItem(index: number) {
@@ -209,28 +232,54 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
             <div className="flex flex-col gap-2.5">
               <div className="font-inter text-xs font-bold text-sub">Item Struk</div>
               {items.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={item.name}
-                    onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
-                    placeholder="Nama item"
-                    className="flex-1 rounded-input border border-border bg-surface px-3 py-2 font-inter text-sm text-text"
-                  />
-                  <input
-                    type="number"
-                    value={item.price || ''}
-                    onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
-                    placeholder="Harga"
-                    className="w-28 rounded-input border border-border bg-surface px-3 py-2 font-mono text-sm text-text"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveItem(idx)}
-                    className="px-2 text-neg font-bold text-base"
-                  >
-                    ×
-                  </button>
+                <div key={idx} className="flex flex-col gap-1.5 rounded-card border border-border bg-surfaceAlt p-2.5">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => handleItemChange(idx, 'name', e.target.value)}
+                      placeholder="Nama item"
+                      className="flex-1 rounded-input border border-border bg-surface px-3 py-2 font-inter text-sm text-text"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItem(idx)}
+                      className="px-2 font-bold text-base text-neg"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex w-20 flex-none items-center gap-1 rounded-input border border-border bg-surface px-2 py-1.5">
+                      <span className="font-inter text-xs text-sub">Qty</span>
+                      <input
+                        type="number"
+                        value={item.qty ?? 1}
+                        onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
+                        className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
+                      />
+                    </div>
+                    <div className="flex flex-1 items-center gap-1 rounded-input border border-border bg-surface px-2 py-1.5">
+                      <span className="font-mono text-[11px] text-sub">@Rp</span>
+                      <input
+                        type="number"
+                        value={item.unitPrice || ''}
+                        onChange={(e) => handleItemChange(idx, 'unitPrice', e.target.value)}
+                        placeholder="Satuan"
+                        className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
+                      />
+                    </div>
+                    <div className="flex flex-1 items-center gap-1 rounded-input border border-border bg-surface px-2 py-1.5">
+                      <span className="font-mono text-[11px] text-sub">Total</span>
+                      <input
+                        type="number"
+                        value={item.price || ''}
+                        onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
+                        placeholder="Total"
+                        className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
 

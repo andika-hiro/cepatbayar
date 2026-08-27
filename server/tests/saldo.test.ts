@@ -76,7 +76,7 @@ describe('Saldo & Deposits API', () => {
     expect(res.body.rollupMembers).toHaveLength(2);
     
     const budiRollup = res.body.rollupMembers.find((m: any) => m.memberId === memberBudiId);
-    expect(budiRollup.rollup).toBe(-20000);
+    expect(budiRollup.rollup).toBe(-10000);
     expect(budiRollup.status).toBe('neg');
 
     expect(res.body.unsettledDebts).toHaveLength(1);

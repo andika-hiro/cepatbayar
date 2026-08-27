@@ -8,8 +8,9 @@ describe('formatDateRange', () => {
 });
 
 describe('formatRupiah', () => {
-  it('formats a positive amount with a Rp prefix and thousands separators', () => {
-    expect(formatRupiah(20000)).toBe('Rp20.000');
+  it('formats a positive amount with a Rp prefix and comma thousands separators', () => {
+    expect(formatRupiah(20000)).toBe('Rp20,000');
+    expect(formatRupiah(5000000)).toBe('Rp5,000,000');
   });
 
   it('formats zero without a sign', () => {
@@ -17,6 +18,6 @@ describe('formatRupiah', () => {
   });
 
   it('formats a negative amount with the minus sign before Rp', () => {
-    expect(formatRupiah(-20000)).toBe('-Rp20.000');
+    expect(formatRupiah(-20000)).toBe('-Rp20,000');
   });
 });

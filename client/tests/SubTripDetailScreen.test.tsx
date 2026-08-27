@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -11,6 +11,8 @@ vi.mock('../src/lib/api', () => ({
     tripDetail: vi.fn(),
     toggleDebtSettled: vi.fn(),
     deleteSubTrip: vi.fn(),
+    getSaldoData: vi.fn().mockResolvedValue(null),
+    getSettledDebts: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -70,10 +72,10 @@ describe('SubTripDetailScreen — display', () => {
     expect(await screen.findByText('Makan Malam')).toBeInTheDocument();
     expect(screen.getByText('Makan · 2026-01-01')).toBeInTheDocument();
     expect(screen.getByText('Total dibayar Budi')).toBeInTheDocument();
-    expect(screen.getByText('Rp60.000')).toBeInTheDocument();
+    expect(screen.getByText('Rp60,000')).toBeInTheDocument();
     expect(screen.getByText('Aji')).toBeInTheDocument();
     expect(screen.getByText('Belum transfer')).toBeInTheDocument();
-    expect(screen.getByText('Rp30.000')).toBeInTheDocument();
+    expect(screen.getByText('Rp30,000')).toBeInTheDocument();
   });
 
   it('navigates back to Riwayat via the back link', async () => {
@@ -90,10 +92,12 @@ describe('SubTripDetailScreen — toggling debts', () => {
     setIdentity('a1', '2');
     vi.mocked(api.toggleDebtSettled).mockResolvedValue({ ok: true });
     renderScreen();
-    const user = userEvent.setup();
-    await user.click(await screen.findByText('Tandai lunas'));
-    expect(api.toggleDebtSettled).toHaveBeenCalledWith('a1', 5, 10, true);
-    expect(api.getSubTrip).toHaveBeenCalledTimes(2);
+    const knob = await screen.findByTestId('swipe-knob');
+    fireEvent.mouseDown(knob, { clientX: 0 });
+    fireEvent.mouseMove(knob, { clientX: 300 });
+    fireEvent.mouseUp(knob);
+    expect(api.toggleDebtSettled).toHaveBeenCalledWith('a1', 5, 10, true, 2);
+    await waitFor(() => expect(api.getSubTrip).toHaveBeenCalledTimes(2));
   });
 });
 

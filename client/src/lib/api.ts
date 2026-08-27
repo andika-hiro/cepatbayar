@@ -64,6 +64,8 @@ export interface DebtItem {
   name: string;
   amount: number;
   settled: boolean;
+  settledByMemberId?: number | null;
+  settledByMemberName?: string | null;
   depositNote?: string;
   coveredByDeposit?: boolean;
 }
@@ -175,19 +177,33 @@ export interface DepositSummaryItem {
   low: boolean;
 }
 
+export interface RawDepositItem {
+  id: number;
+  fromMemberId: number;
+  fromName: string;
+  toMemberId: number;
+  toName: string;
+  amount: number;
+}
+
 export interface SaldoData {
   rollupMembers: RollupMember[];
   unsettledDebts: UnsettledDebtItem[];
   deposits: DepositSummaryItem[];
+  rawDeposits?: RawDepositItem[];
 }
 
 export interface SettledDebtItem {
   id: number;
   subTripName: string;
+  debtorId?: number;
   debtorName: string;
+  creditorId?: number;
   creditorName: string;
   amount: number;
   settledAt: string;
+  settledByMemberId?: number | null;
+  settledByMemberName?: string | null;
 }
 
 export class ApiError extends Error {
@@ -244,10 +260,11 @@ export const api = {
       method: 'DELETE',
       headers: { 'X-Member-Id': String(memberId) },
     }),
-  toggleDebtSettled: (publicId: string, subTripId: number, debtId: number, settled: boolean) =>
+  toggleDebtSettled: (publicId: string, subTripId: number, debtId: number, settled: boolean, settledByMemberId?: number | null) =>
     request<{ ok: true }>(`/trips/${publicId}/subtrips/${subTripId}/debts/${debtId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ settled }),
+      body: JSON.stringify({ settled, settledByMemberId }),
+      headers: settledByMemberId ? { 'X-Member-Id': String(settledByMemberId) } : undefined,
     }),
   createTrip: (input: { name: string; destination: string; startDate: string; endDate: string; members: string[] }) =>
     request<{ publicId: string }>('/trips', { method: 'POST', body: JSON.stringify(input) }),
@@ -255,6 +272,8 @@ export const api = {
   getSettledDebts: (publicId: string) => request<SettledDebtItem[]>(`/trips/${publicId}/settled-debts`),
   createDeposit: (publicId: string, input: { fromMemberId: number; toMemberId: number; amount: number; proofNote?: string }) =>
     request<{ success: true; id: number }>(`/trips/${publicId}/deposits`, { method: 'POST', body: JSON.stringify(input) }),
+  deleteDeposit: (publicId: string, depositId: number) =>
+    request<{ success: true }>(`/trips/${publicId}/deposits/${depositId}`, { method: 'DELETE' }),
   addTripMember: (publicId: string, name: string) =>
     request<{ id: number; name: string }>(`/trips/${publicId}/members`, { method: 'POST', body: JSON.stringify({ name }) }),
   getMemberAccounts: (publicId: string, memberId: number) =>

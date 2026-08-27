@@ -1,18 +1,22 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api, type SubTripDetail as SubTripDetailType } from '../lib/api';
+import { api, type SaldoData, type SubTripDetail as SubTripDetailType } from '../lib/api';
 import { getCurrentMemberId } from '../lib/localTrips';
 import { formatRupiah } from '../lib/format';
 import { categoryLabel } from '../lib/categories';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
+import SwipeToConfirm from '../components/SwipeToConfirm';
+import MemberDetailSheet from '../components/MemberDetailSheet';
 
 export default function SubTripDetailScreen() {
   const { publicId, subTripId } = useParams<{ publicId: string; subTripId: string }>();
   const navigate = useNavigate();
   const [subTrip, setSubTrip] = useState<SubTripDetailType | null>(null);
   const [members, setMembers] = useState<{ id: number; name: string }[] | null>(null);
+  const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
   const [sheetMode, setSheetMode] = useState<'create' | 'edit' | null>(null);
+  const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,12 +25,14 @@ export default function SubTripDetailScreen() {
   async function load() {
     if (!publicId || !subTripId) return;
     try {
-      const [subTripData, tripData] = await Promise.all([
+      const [subTripData, tripData, saldoRes] = await Promise.all([
         api.getSubTrip(publicId, Number(subTripId)),
         api.tripDetail(publicId),
+        api.getSaldoData ? api.getSaldoData(publicId).catch(() => null) : Promise.resolve(null),
       ]);
       setSubTrip(subTripData);
       setMembers(tripData.members);
+      setSaldoData(saldoRes);
     } catch {
       setError('Gagal muat detail sub trip. Coba refresh halaman.');
     }
@@ -39,7 +45,7 @@ export default function SubTripDetailScreen() {
 
   async function handleToggleSettled(debtId: number, settled: boolean) {
     if (!publicId || !subTripId) return;
-    await api.toggleDebtSettled(publicId, Number(subTripId), debtId, settled);
+    await api.toggleDebtSettled(publicId, Number(subTripId), debtId, settled, currentMemberId);
     load();
   }
 
@@ -121,38 +127,43 @@ export default function SubTripDetailScreen() {
       <div className="flex flex-col gap-2">
         <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">Tagihan per orang</div>
         {subTrip.debts.map((d) => (
-          <div key={d.id} className="flex items-center justify-between gap-3 rounded-card border border-border bg-surface px-3.5 py-3">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-surfaceAlt font-manrope text-xs font-bold text-text">
-                {d.name.trim().charAt(0).toUpperCase() || '?'}
-              </div>
-              <div>
-                <div className="font-inter text-sm font-semibold text-text">{d.name}</div>
-                <div className={`font-inter text-[11px] ${d.settled ? 'text-pos' : 'text-neg'}`}>
-                  {d.settled ? (d.coveredByDeposit ? 'Lunas (Deposit)' : 'Lunas') : 'Belum transfer'}
-                </div>
-                {d.depositNote && (
-                  <div className="mt-0.5 font-inter text-[10.5px] font-medium text-accent">
-                    {d.depositNote}
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-col items-end gap-1.5">
-              <div className="font-mono text-sm font-semibold text-text">{formatRupiah(d.amount)}</div>
-              <button
-                onClick={() => handleToggleSettled(d.id, !d.settled)}
-                className={`rounded-input border px-2.5 py-1 font-inter text-[11px] font-semibold ${
-                  d.settled ? 'border-pos text-pos' : 'border-accent text-accent'
-                }`}
+          <div key={d.id} className="flex flex-col gap-2 rounded-card border border-border bg-surface p-3.5">
+            <div className="flex items-center justify-between gap-3">
+              <div
+                onClick={() => {
+                  const targetMember = members?.find((m) => m.name === d.name);
+                  if (targetMember) setSelectedMemberDetail({ id: targetMember.id, name: targetMember.name });
+                }}
+                className="flex items-center gap-2.5 cursor-pointer hover:opacity-85"
               >
-                {d.settled ? 'Batalkan' : 'Tandai lunas'}
-              </button>
+                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-surfaceAlt font-manrope text-xs font-bold text-text">
+                  {d.name.charAt(0)}
+                </div>
+                <div>
+                  <div className="font-inter text-sm font-semibold text-text hover:underline">{d.name}</div>
+                  <div className={`font-inter text-[11px] ${d.settled ? 'text-pos' : 'text-neg'}`}>
+                    {d.settled ? (d.coveredByDeposit ? 'Lunas (Deposit)' : 'Lunas') : 'Belum transfer'}
+                  </div>
+                  {d.depositNote && (
+                    <div className="mt-0.5 font-inter text-[10.5px] font-medium text-accent">
+                      {d.depositNote}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="font-mono text-sm font-semibold text-text">{formatRupiah(d.amount)}</div>
             </div>
+
+            <SwipeToConfirm
+              label="Geser tandai lunas 👉"
+              confirmedLabel={d.settledByMemberName ? `✓ Lunas (oleh ${d.settledByMemberName})` : '✓ Lunas'}
+              isSettled={Boolean(d.settled)}
+              onConfirm={() => handleToggleSettled(d.id, true)}
+              onReset={() => handleToggleSettled(d.id, false)}
+            />
           </div>
         ))}
       </div>
-
 
       {canModify && (
         <div className="flex flex-col gap-2 border-t border-border pt-3">
@@ -207,6 +218,16 @@ export default function SubTripDetailScreen() {
           onSaved={handleSaved}
         />
       )}
+
+      <MemberDetailSheet
+        isOpen={Boolean(selectedMemberDetail)}
+        onClose={() => setSelectedMemberDetail(null)}
+        publicId={publicId ?? ''}
+        memberId={selectedMemberDetail?.id ?? 0}
+        memberName={selectedMemberDetail?.name ?? ''}
+        saldoData={saldoData}
+        onRefresh={load}
+      />
     </div>
   );
 }

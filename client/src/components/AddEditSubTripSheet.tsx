@@ -1,12 +1,15 @@
 import { useRef, useState } from 'react';
 import { api, type SplitMode, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
 import { CATEGORIES } from '../lib/categories';
+import { formatNumberWithCommas } from '../lib/format';
 import ItemRow, { type ItemRowParticipant } from './ItemRow';
 import OcrScanSheet from './OcrScanSheet';
 
 interface DraftItem {
   key: string;
   name: string;
+  qtyText: string;
+  unitPriceText: string;
   priceText: string;
   participants: ItemRowParticipant[];
 }
@@ -51,10 +54,12 @@ export default function AddEditSubTripSheet({
       ? initialData.items.map((item) => ({
           key: `item-${item.id}`,
           name: item.name,
+          qtyText: '1',
+          unitPriceText: String(item.price),
           priceText: String(item.price),
           participants: item.participants.map((p) => ({ memberId: p.memberId, billedToMemberId: p.billedToMemberId })),
         }))
-      : [{ key: 'item-0', name: '', priceText: '', participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })) }],
+      : [{ key: 'item-0', name: '', qtyText: '1', unitPriceText: '', priceText: '', participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })) }],
   );
   const nextItemKeyRef = useRef(Date.now());
 
@@ -64,6 +69,8 @@ export default function AddEditSubTripSheet({
       {
         key: `item-${nextItemKeyRef.current++}`,
         name: '',
+        qtyText: '1',
+        unitPriceText: '',
         priceText: '',
         participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })),
       },
@@ -77,6 +84,55 @@ export default function AddEditSubTripSheet({
   function updateItem(key: string, patch: Partial<DraftItem>) {
     setItems((prev) => prev.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   }
+
+  function handleItemQtyChange(key: string, newQtyText: string) {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        const qty = parseInt(newQtyText, 10) || 1;
+        const unitPrice = parseInt(item.unitPriceText, 10) || (parseInt(item.priceText, 10) || 0);
+        const newPriceText = unitPrice > 0 ? String(qty * unitPrice) : item.priceText;
+        return {
+          ...item,
+          qtyText: newQtyText,
+          unitPriceText: unitPrice > 0 ? String(unitPrice) : item.unitPriceText,
+          priceText: newPriceText,
+        };
+      })
+    );
+  }
+
+  function handleItemUnitPriceChange(key: string, newUnitPriceText: string) {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        const qty = parseInt(item.qtyText, 10) || 1;
+        const unitPrice = parseInt(newUnitPriceText, 10) || 0;
+        return {
+          ...item,
+          unitPriceText: newUnitPriceText,
+          priceText: String(qty * unitPrice),
+        };
+      })
+    );
+  }
+
+  function handleItemPriceChange(key: string, newPriceText: string) {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.key !== key) return item;
+        const qty = parseInt(item.qtyText, 10) || 1;
+        const total = parseInt(newPriceText, 10) || 0;
+        const unitPrice = total > 0 ? Math.round(total / qty) : 0;
+        return {
+          ...item,
+          priceText: newPriceText,
+          unitPriceText: unitPrice > 0 ? String(unitPrice) : '',
+        };
+      })
+    );
+  }
+
   const [taxPercentText, setTaxPercentText] = useState(initialData ? String(initialData.taxPercent) : '0');
   const [servicePercentText, setServicePercentText] = useState(initialData ? String(initialData.servicePercent) : '0');
   const [payerOpen, setPayerOpen] = useState(false);
@@ -101,17 +157,24 @@ export default function AddEditSubTripSheet({
     setCheckedIds(next);
   }
 
-  function handleApplyOcr(draft: { items: { name: string; price: number }[]; taxPercent: number; servicePercent: number }) {
+  function handleApplyOcr(draft: { items: { name: string; qty?: number; unitPrice?: number; price: number }[]; taxPercent: number; servicePercent: number }) {
     setSplitMode('per_item');
     setTaxPercentText(String(draft.taxPercent));
     setServicePercentText(String(draft.servicePercent));
     setItems(
-      draft.items.map((item, idx) => ({
-        key: `ocr-item-${idx}-${Date.now()}`,
-        name: item.name,
-        priceText: String(item.price),
-        participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })),
-      }))
+      draft.items.map((item, idx) => {
+        const qty = item.qty || 1;
+        const price = item.price;
+        const unitPrice = item.unitPrice || (price > 0 ? Math.round(price / qty) : 0);
+        return {
+          key: `ocr-item-${idx}-${Date.now()}`,
+          name: item.name,
+          qtyText: String(qty),
+          unitPriceText: unitPrice > 0 ? String(unitPrice) : '',
+          priceText: String(price),
+          participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })),
+        };
+      })
     );
     setOcrSheetOpen(false);
     setAdvancedOpen(true);
@@ -265,7 +328,7 @@ export default function AddEditSubTripSheet({
             <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
               <span className="font-mono text-sm text-sub">Rp</span>
               <input
-                value={amountText}
+                value={amountText ? formatNumberWithCommas(amountText) : ''}
                 onChange={(e) => setAmountText(e.target.value.replace(/[^0-9]/g, ''))}
                 inputMode="numeric"
                 placeholder="0"
@@ -283,12 +346,16 @@ export default function AddEditSubTripSheet({
                 key={item.key}
                 index={idx}
                 name={item.name}
+                qtyText={item.qtyText}
+                unitPriceText={item.unitPriceText}
                 priceText={item.priceText}
                 participants={item.participants}
                 members={members}
                 canRemove={items.length > 1}
                 onNameChange={(value) => updateItem(item.key, { name: value })}
-                onPriceChange={(value) => updateItem(item.key, { priceText: value })}
+                onQtyChange={(value) => handleItemQtyChange(item.key, value)}
+                onUnitPriceChange={(value) => handleItemUnitPriceChange(item.key, value)}
+                onPriceChange={(value) => handleItemPriceChange(item.key, value)}
                 onParticipantsChange={(value) => updateItem(item.key, { participants: value })}
                 onRemove={() => removeItem(item.key)}
               />

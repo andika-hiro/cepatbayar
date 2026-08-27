@@ -6,6 +6,7 @@ import { formatRupiah } from '../lib/format';
 import { categoryLabel } from '../lib/categories';
 import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
+import ShareTripSheet from '../components/ShareTripSheet';
 import AppLogo from '../components/AppLogo';
 
 
@@ -15,6 +16,7 @@ export default function RiwayatScreen() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [subTrips, setSubTrips] = useState<SubTripListItem[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
@@ -53,12 +55,21 @@ export default function RiwayatScreen() {
   return (
 
     <div className="flex min-h-screen flex-col gap-3 px-5 pb-[100px] pt-2">
-      <div className="mt-2.5">
-        <div className="flex items-center gap-2 font-manrope text-lg font-extrabold text-text">
-          <AppLogo size={24} />
-          <span>Riwayat</span>
+      <div className="mt-2.5 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 font-manrope text-lg font-extrabold text-text">
+            <AppLogo size={24} />
+            <span>Riwayat</span>
+          </div>
+          <div className="mt-1 font-inter text-xs text-sub">Tiap sub trip punya tagihan sendiri, gak digabung sama yang lain.</div>
         </div>
-        <div className="mt-1 font-inter text-xs text-sub">Tiap sub trip punya tagihan sendiri, gak digabung sama yang lain.</div>
+        <button
+          onClick={() => setShareOpen(true)}
+          className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1.5 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90 active:scale-95 transition-transform"
+        >
+          <span>🔗</span>
+          <span>Bagikan</span>
+        </button>
       </div>
 
 
@@ -97,6 +108,13 @@ export default function RiwayatScreen() {
           onSaved={handleSaved}
         />
       )}
+
+      <ShareTripSheet
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        tripName={trip.name}
+        publicId={publicId}
+      />
     </div>
   );
 }

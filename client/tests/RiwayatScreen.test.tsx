@@ -49,7 +49,7 @@ describe('RiwayatScreen', () => {
     renderScreen();
     expect(await screen.findByText('Makan Siang')).toBeInTheDocument();
     expect(screen.getByText('Makan · dibayar Budi · 2026-01-01 · 1 belum lunas')).toBeInTheDocument();
-    expect(screen.getByText('Rp40.000')).toBeInTheDocument();
+    expect(screen.getByText('Rp40,000')).toBeInTheDocument();
   });
 
   it('shows "Semua lunas" when a sub trip has no unsettled debts', async () => {
