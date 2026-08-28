@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { formatRupiah } from '../lib/format';
+import { compressImage } from '../lib/imageCompressor';
 
 export interface SettleDebtTarget {
   subTripId: number;
@@ -54,13 +55,11 @@ export default function SettleDebtModal({
         if (items[i].type.startsWith('image/')) {
           const blob = items[i].getAsFile();
           if (blob) {
-            const reader = new FileReader();
-            reader.onload = () => {
-              setProofImage(reader.result as string);
+            compressImage(blob).then((compressed) => {
+              setProofImage(compressed);
               setCopiedNotification(true);
               setTimeout(() => setCopiedNotification(false), 3000);
-            };
-            reader.readAsDataURL(blob);
+            });
             break;
           }
         }
@@ -82,13 +81,10 @@ export default function SettleDebtModal({
         const imageType = item.types.find((t) => t.startsWith('image/'));
         if (imageType) {
           const blob = await item.getType(imageType);
-          const reader = new FileReader();
-          reader.onload = () => {
-            setProofImage(reader.result as string);
-            setCopiedNotification(true);
-            setTimeout(() => setCopiedNotification(false), 3000);
-          };
-          reader.readAsDataURL(blob);
+          const compressed = await compressImage(blob as File);
+          setProofImage(compressed);
+          setCopiedNotification(true);
+          setTimeout(() => setCopiedNotification(false), 3000);
           return;
         }
       }
@@ -98,14 +94,11 @@ export default function SettleDebtModal({
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setProofImage(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImage(file);
+    setProofImage(compressed);
   }
 
   function toggleDebtSelection(debtId: number) {

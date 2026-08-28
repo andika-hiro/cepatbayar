@@ -8,6 +8,7 @@ import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
 import { computeEqualShares, reconcileDebts } from '../lib/splitLogic';
 import { computeItemBasedShares } from '../lib/itemSplitLogic';
 import { computeDynamicDeposits } from '../lib/depositLogic';
+import { uploadImage } from '../lib/storage';
 
 import { isoDateSchema } from '../lib/validators';
 import { attachUserIfPresent } from '../auth/attachUserIfPresent';
@@ -559,13 +560,19 @@ router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTrip
     ? (parsed.data.settledByMemberId ?? (claimedMemberIdHeader ? Number(claimedMemberIdHeader) : null))
     : null;
 
+  const uploadedProof = parsed.data.settled && parsed.data.proofImage
+    ? await uploadImage(parsed.data.proofImage, 'proofs')
+    : parsed.data.settled
+    ? debt.proofImage
+    : null;
+
   await db
     .update(debts)
     .set({
       settled: parsed.data.settled,
       settledAt: parsed.data.settled ? new Date() : null,
       settledByMemberId: settledByMemberId,
-      proofImage: parsed.data.settled ? (parsed.data.proofImage ?? debt.proofImage) : null,
+      proofImage: uploadedProof,
     })
     .where(eq(debts.id, debtId));
 

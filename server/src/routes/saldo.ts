@@ -3,6 +3,7 @@ import { db } from '../db/client';
 import { trips, tripMembers, subTrips, debts, deposits, memberAccounts } from '../db/schema';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { computeDynamicDeposits } from '../lib/depositLogic';
+import { uploadImage } from '../lib/storage';
 
 const router = Router();
 
@@ -207,6 +208,8 @@ router.post('/:publicId/debts/batch-settle', async (req, res) => {
     return res.status(404).json({ error: 'No matching debts found' });
   }
 
+  const uploadedProof = settled && proofImage ? await uploadImage(proofImage, 'proofs') : null;
+
   await db.transaction(async (tx) => {
     await tx
       .update(debts)
@@ -214,7 +217,7 @@ router.post('/:publicId/debts/batch-settle', async (req, res) => {
         settled: Boolean(settled),
         settledAt: settled ? new Date() : null,
         settledByMemberId: finalSettledByMemberId,
-        proofImage: settled ? (proofImage || null) : null,
+        proofImage: settled ? uploadedProof : null,
       })
       .where(inArray(debts.id, validIds));
   });

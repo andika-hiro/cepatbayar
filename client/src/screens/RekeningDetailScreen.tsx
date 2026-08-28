@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type TripDetail, type MemberAccount } from '../lib/api';
+import { compressImage } from '../lib/imageCompressor';
 
 export default function RekeningDetailScreen() {
   const { publicId, memberId } = useParams<{ publicId: string; memberId: string }>();
@@ -8,11 +9,13 @@ export default function RekeningDetailScreen() {
   const [trip, setTrip] = useState<TripDetail | null>(null);
   const [accounts, setAccounts] = useState<MemberAccount[] | null>(null);
   const [isAddSheetOpen, setIsAddSheetOpen] = useState(false);
+  const [previewQris, setPreviewQris] = useState<string | null>(null);
+
+  // Form states
   const [label, setLabel] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [isDefault, setIsDefault] = useState(false);
   const [qrisImage, setQrisImage] = useState<string | null>(null);
-  const [previewQris, setPreviewQris] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,14 +40,11 @@ export default function RekeningDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicId, memberId]);
 
-  function handleQrisFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleQrisFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setQrisImage(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+    const compressed = await compressImage(file);
+    setQrisImage(compressed);
   }
 
   function handleCopy(accId: number, num: string) {

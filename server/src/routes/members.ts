@@ -3,6 +3,7 @@ import { db } from '../db/client';
 import { trips, tripMembers, memberAccounts } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import { getTripByPublicId, memberIdsBelongToTrip } from '../lib/tripAccess';
+import { uploadImage } from '../lib/storage';
 
 const router = Router();
 
@@ -78,15 +79,17 @@ router.post('/:publicId/members/:memberId/accounts', async (req, res) => {
     await db.update(memberAccounts).set({ isDefault: false }).where(eq(memberAccounts.memberId, memberId));
   }
 
+  const uploadedQris = qrisImage ? await uploadImage(qrisImage, 'qris') : null;
+
   const inserted = await db.insert(memberAccounts).values({
     memberId,
     label,
     accountNumber,
     isDefault: !!isDefault,
-    qrisImage: qrisImage || null,
+    qrisImage: uploadedQris,
   });
 
-  res.status(201).json({ id: inserted[0].insertId, label, accountNumber, isDefault: !!isDefault, qrisImage: qrisImage || null });
+  res.status(201).json({ id: inserted[0].insertId, label, accountNumber, isDefault: !!isDefault, qrisImage: uploadedQris });
 });
 
 // PATCH /api/trips/:publicId/members/:memberId/accounts/:accountId
