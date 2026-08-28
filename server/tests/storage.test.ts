@@ -1,22 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { uploadImage, isR2Configured } from '../src/lib/storage';
+import { uploadImage, isCloudinaryConfigured, isR2Configured } from '../src/lib/storage';
 
-describe('Storage (Cloudflare R2 & fallback)', () => {
+describe('Storage (Cloudinary, R2 & fallback)', () => {
   it('handles null/undefined gracefully', async () => {
     expect(await uploadImage(null)).toBeNull();
     expect(await uploadImage(undefined)).toBeNull();
   });
 
   it('preserves existing remote URLs', async () => {
-    const url = 'https://media.example.com/proofs/receipt.jpg';
+    const url = 'https://res.cloudinary.com/demo/image/upload/sample.jpg';
     expect(await uploadImage(url)).toBe(url);
   });
 
-  it('returns fallback data when R2 credentials are not set', async () => {
+  it('returns fallback data when neither Cloudinary nor R2 credentials are set', async () => {
     const rawBase64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
     const result = await uploadImage(rawBase64);
-    // If R2 is not configured in test env, it returns rawBase64
-    if (!isR2Configured()) {
+    if (!isCloudinaryConfigured() && !isR2Configured()) {
       expect(result).toBe(rawBase64);
     }
   });
