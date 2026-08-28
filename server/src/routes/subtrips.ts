@@ -529,8 +529,8 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
 
 const toggleDebtSchema = z.object({
   settled: z.boolean(),
-  settledByMemberId: z.number().int().positive().optional(),
-  proofImage: z.string().optional(),
+  settledByMemberId: z.number().int().positive().nullish(),
+  proofImage: z.string().nullish(),
 });
 
 router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTripId/debts/:debtId', async (req, res) => {

@@ -31,6 +31,19 @@ export default function MemberDetailSheet({
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
+  async function fetchSettled() {
+    if (!publicId) return;
+    setLoadingSettled(true);
+    try {
+      const data = await api.getSettledDebts(publicId);
+      setSettledDebts(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSettled(false);
+    }
+  }
+
   async function handleConfirmSettlement(selectedDebts: SettleDebtTarget[], proofImage?: string | null) {
     if (!publicId || selectedDebts.length === 0) return;
     try {
@@ -52,6 +65,7 @@ export default function MemberDetailSheet({
         });
       }
       setSettleTargetDebt(null);
+      await fetchSettled();
       if (onRefresh) onRefresh();
     } catch {
       alert('Gagal memperbarui status pelunasan');
@@ -62,6 +76,7 @@ export default function MemberDetailSheet({
     if (!publicId) return;
     try {
       await api.toggleDebtSettled(publicId, subTripId, debtId, false, currentMemberId);
+      await fetchSettled();
       if (onRefresh) onRefresh();
     } catch {
       alert('Gagal membatalkan status pelunasan');
@@ -70,12 +85,7 @@ export default function MemberDetailSheet({
 
   useEffect(() => {
     if (isOpen && publicId) {
-      setLoadingSettled(true);
-      api
-        .getSettledDebts(publicId)
-        .then((data) => setSettledDebts(data))
-        .catch(() => {})
-        .finally(() => setLoadingSettled(false));
+      fetchSettled();
     }
   }, [isOpen, publicId]);
 

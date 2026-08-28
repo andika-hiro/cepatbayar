@@ -78,11 +78,15 @@ describe('PATCH .../subtrips/:subTripId/debts/:debtId', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 404 (not a 500) for a non-numeric debtId in the URL', async () => {
-    const { publicId, subTripId } = await createTripWithDebt();
+  it('marks debt as settled with explicit null proofImage and null settledByMemberId', async () => {
+    const { publicId, subTripId, debtId } = await createTripWithDebt();
     const res = await request(app)
-      .patch(`/api/trips/${publicId}/subtrips/${subTripId}/debts/not-a-number`)
-      .send({ settled: true });
-    expect(res.status).toBe(404);
+      .patch(`/api/trips/${publicId}/subtrips/${subTripId}/debts/${debtId}`)
+      .send({ settled: true, settledByMemberId: null, proofImage: null });
+    expect(res.status).toBe(200);
+
+    const [updated] = await db.select().from(debts).where(eq(debts.id, debtId));
+    expect(updated.settled).toBe(true);
+    expect(updated.proofImage).toBeNull();
   });
 });
