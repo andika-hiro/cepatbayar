@@ -193,6 +193,7 @@ export interface SaldoData {
   rawDeposits?: RawDepositItem[];
 }
 
+
 export interface SettledDebtItem {
   id: number;
   subTripName: string;
@@ -275,6 +276,7 @@ export const api = {
   deleteDeposit: (publicId: string, depositId: number) =>
     request<{ success: true }>(`/trips/${publicId}/deposits/${depositId}`, { method: 'DELETE' }),
   addTripMember: (publicId: string, name: string) =>
+
     request<{ id: number; name: string }>(`/trips/${publicId}/members`, { method: 'POST', body: JSON.stringify({ name }) }),
   getMemberAccounts: (publicId: string, memberId: number) =>
     request<MemberAccount[]>(`/trips/${publicId}/members/${memberId}/accounts`),

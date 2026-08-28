@@ -79,6 +79,7 @@ describe('Saldo & Deposits API', () => {
     expect(budiRollup.rollup).toBe(-10000);
     expect(budiRollup.status).toBe('neg');
 
+
     expect(res.body.unsettledDebts).toHaveLength(1);
     const debt = res.body.unsettledDebts[0];
     expect(debt.amount).toBe(20000);
@@ -89,6 +90,11 @@ describe('Saldo & Deposits API', () => {
     expect(res.body.deposits).toHaveLength(1);
     expect(res.body.deposits[0].remainingBalance).toBe(0);
     expect(res.body.deposits[0].low).toBe(true);
+
+    expect(res.body.depositHistory).toHaveLength(1);
+    expect(res.body.depositHistory[0].amount).toBe(10000);
+    expect(res.body.depositHistory[0].fromName).toBe('Budi');
+    expect(res.body.depositHistory[0].toName).toBe('Adit');
   });
 
   it('POST /api/trips/:publicId/deposits creates a deposit record', async () => {
@@ -102,6 +108,19 @@ describe('Saldo & Deposits API', () => {
       });
     expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
+  });
+
+  it('DELETE /api/trips/:publicId/deposits/:depositId deletes a deposit record', async () => {
+    const saldoRes = await request(app).get(`/api/trips/${tripPublicId}/saldo`);
+    const depositId = saldoRes.body.depositHistory[0].id;
+
+    const delRes = await request(app).delete(`/api/trips/${tripPublicId}/deposits/${depositId}`);
+    expect(delRes.status).toBe(200);
+    expect(delRes.body.success).toBe(true);
+
+    const afterRes = await request(app).get(`/api/trips/${tripPublicId}/saldo`);
+    expect(afterRes.body.depositHistory).toHaveLength(0);
+    expect(afterRes.body.deposits).toHaveLength(0);
   });
 
   it('GET /api/trips/:publicId/settled-debts returns settled debts history', async () => {
@@ -121,3 +140,4 @@ describe('Saldo & Deposits API', () => {
     expect(res.body[0].creditorName).toBe('Adit');
   });
 });
+

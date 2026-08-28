@@ -94,7 +94,41 @@ describe('SaldoScreen', () => {
 
     const lunasLabel = await screen.findByText('Lunas');
     expect(lunasLabel.className).toContain('text-sub');
+  });
 
+  it('renders deposit history and allows deleting a deposit', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(api.deleteDeposit).mockResolvedValue({ success: true });
+    vi.mocked(api.getSaldoData).mockResolvedValue({
+      rollupMembers: [{ memberId: 1, name: 'Adit', rollup: 0, status: 'zero' }],
+      unsettledDebts: [],
+      deposits: [
+        { fromMemberId: 2, fromName: 'Budi', toMemberId: 1, toName: 'Adit', totalAmount: 10000, remainingBalance: 10000, low: false },
+      ],
+      depositHistory: [
+        { id: 99, fromMemberId: 2, fromName: 'Budi', toMemberId: 1, toName: 'Adit', amount: 10000, proofNote: 'Via BCA' },
+      ],
+    });
 
+    render(
+      <MemoryRouter initialEntries={['/t/test-trip/saldo']}>
+        <Routes>
+          <Route path="/t/:publicId/saldo" element={<SaldoScreen />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Rincian catatan deposit/i)).toBeInTheDocument();
+      expect(screen.getByText(/Via BCA/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Hapus/i })).toBeInTheDocument();
+    });
+
+    const deleteBtn = screen.getByRole('button', { name: /Hapus/i });
+    deleteBtn.click();
+
+    expect(window.confirm).toHaveBeenCalled();
+    expect(api.deleteDeposit).toHaveBeenCalledWith('test-trip', 99);
   });
 });
+

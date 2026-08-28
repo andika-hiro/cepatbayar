@@ -3,6 +3,7 @@ import { api, type SplitMode, type SubTripCategory, type SubTripDetail, type Sub
 import { CATEGORIES } from '../lib/categories';
 import { formatNumberWithCommas } from '../lib/format';
 import ItemRow, { type ItemRowParticipant } from './ItemRow';
+
 import OcrScanSheet from './OcrScanSheet';
 
 interface DraftItem {
@@ -40,7 +41,7 @@ export default function AddEditSubTripSheet({
   const [ocrSheetOpen, setOcrSheetOpen] = useState(false);
   const [name, setName] = useState(initialData?.name ?? '');
   const [category, setCategory] = useState<SubTripCategory | null>(initialData?.category ?? null);
-  const [amountText, setAmountText] = useState(initialData ? String(initialData.amount) : '');
+  const [amountText, setAmountText] = useState(initialData ? formatThousands(initialData.amount) : '');
   const [payerMemberId, setPayerMemberId] = useState<number>(initialData?.payerMemberId ?? currentMemberId);
   const [checkedIds, setCheckedIds] = useState<Set<number>>(
     new Set(
@@ -61,6 +62,7 @@ export default function AddEditSubTripSheet({
         }))
       : [{ key: 'item-0', name: '', qtyText: '1', unitPriceText: '', priceText: '', participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })) }],
   );
+
   const nextItemKeyRef = useRef(Date.now());
 
   function addItem() {
@@ -143,11 +145,11 @@ export default function AddEditSubTripSheet({
 
   const payerName = members.find((m) => m.id === payerMemberId)?.name ?? '';
 
-  const amount = Number.parseInt(amountText, 10);
+  const amount = Number.parseInt(amountText.replace(/\D/g, ''), 10);
   const totalModeValid = Number.isFinite(amount) && amount > 0 && checkedIds.size > 0;
   const perItemModeValid =
     items.length > 0 &&
-    items.every((item) => item.name.trim() && Number.parseInt(item.priceText, 10) > 0 && item.participants.length > 0);
+    items.every((item) => item.name.trim() && Number.parseInt(item.priceText.replace(/\D/g, ''), 10) > 0 && item.participants.length > 0);
   const canSubmit = Boolean(name.trim() && category && (splitMode === 'total' ? totalModeValid : perItemModeValid));
 
   function toggleMember(id: number) {
@@ -210,12 +212,13 @@ export default function AddEditSubTripSheet({
               servicePercent: Number.parseFloat(servicePercentText) || 0,
               items: items.map((item) => ({
                 name: item.name.trim(),
-                price: Number.parseInt(item.priceText, 10),
+                price: Number.parseInt(item.priceText.replace(/\D/g, ''), 10),
                 participants: item.participants.map((p) =>
                   p.billedToMemberId ? { memberId: p.memberId, billedToMemberId: p.billedToMemberId } : { memberId: p.memberId },
                 ),
               })),
             };
+
       if (mode === 'create') {
         await api.createSubTrip(publicId, input);
       } else if (initialData) {
@@ -337,6 +340,7 @@ export default function AddEditSubTripSheet({
             </div>
           </label>
         )}
+
 
         {splitMode === 'per_item' && (
           <div className="flex flex-col gap-2.5">

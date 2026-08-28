@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, type OcrScanResult } from '../lib/api';
-import { formatRupiah } from '../lib/format';
+import { formatRupiah, formatThousands } from '../lib/format';
+
 
 interface OcrDraftItem {
   name: string;
@@ -150,6 +151,7 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
     next[index] = curr;
     setItems(next);
   }
+
 
   function handleAddItem() {
     setItems([...items, { name: '', qty: 1, unitPrice: 0, price: 0 }]);

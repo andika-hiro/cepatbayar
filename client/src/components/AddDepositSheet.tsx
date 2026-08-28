@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { TripMember } from '../lib/api';
+import { formatThousands } from '../lib/format';
+
 
 interface AddDepositSheetProps {
   isOpen: boolean;
@@ -120,6 +122,7 @@ export default function AddDepositSheet({
               required
             />
           </div>
+
 
           <div className="flex flex-col gap-1">
             <label htmlFor="proof-note-input" className="font-inter text-xs font-semibold text-sub">Catatan / Bukti transfer (opsional)</label>

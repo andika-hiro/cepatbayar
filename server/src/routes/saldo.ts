@@ -62,7 +62,8 @@ router.get('/:publicId/saldo', async (req, res) => {
   const depositRows = await db
     .select()
     .from(deposits)
-    .where(eq(deposits.tripId, trip.id));
+    .where(eq(deposits.tripId, trip.id))
+    .orderBy(desc(deposits.createdAt));
 
   const formattedDeposits = depositRows.map(dp => ({
     id: dp.id,
@@ -71,6 +72,17 @@ router.get('/:publicId/saldo', async (req, res) => {
     toMemberId: dp.toMemberId,
     toName: memberMap.get(dp.toMemberId)?.name || 'Unknown',
     amount: dp.amount,
+  }));
+
+  const depositHistory = depositRows.map(dp => ({
+    id: dp.id,
+    fromMemberId: dp.fromMemberId,
+    fromName: memberMap.get(dp.fromMemberId)?.name || 'Unknown',
+    toMemberId: dp.toMemberId,
+    toName: memberMap.get(dp.toMemberId)?.name || 'Unknown',
+    amount: dp.amount,
+    proofNote: dp.proofNote,
+    createdAt: dp.createdAt,
   }));
 
   const dynamicResult = computeDynamicDeposits(allDebtsRaw, formattedDeposits);
@@ -118,6 +130,7 @@ router.get('/:publicId/saldo', async (req, res) => {
     rawDeposits: formattedDeposits,
   });
 });
+
 
 
 // GET /api/trips/:publicId/settled-debts
@@ -212,3 +225,4 @@ router.delete('/:publicId/deposits/:depositId', async (req, res) => {
 });
 
 export default router;
+
