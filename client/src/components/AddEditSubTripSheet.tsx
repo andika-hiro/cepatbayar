@@ -42,6 +42,7 @@ export default function AddEditSubTripSheet({
   const [name, setName] = useState(initialData?.name ?? '');
   const [category, setCategory] = useState<SubTripCategory | null>(initialData?.category ?? null);
   const [amountText, setAmountText] = useState(initialData ? formatThousands(initialData.amount) : '');
+  const [discountText, setDiscountText] = useState(initialData?.discountAmount ? formatThousands(initialData.discountAmount) : '');
   const [payerMemberId, setPayerMemberId] = useState<number>(initialData?.payerMemberId ?? currentMemberId);
   const [checkedIds, setCheckedIds] = useState<Set<number>>(
     new Set(
@@ -189,6 +190,7 @@ export default function AddEditSubTripSheet({
     try {
       const date = initialData?.date ?? todayIso();
       const createdByMemberId = initialData?.createdByMemberId ?? currentMemberId;
+      const discountAmount = Number.parseInt(discountText.replace(/\D/g, ''), 10) || 0;
       const input: SubTripInput =
         splitMode === 'total'
           ? {
@@ -199,6 +201,7 @@ export default function AddEditSubTripSheet({
               createdByMemberId,
               splitMode: 'total',
               amount,
+              discountAmount,
               participantMemberIds: [...checkedIds],
             }
           : {
@@ -208,6 +211,7 @@ export default function AddEditSubTripSheet({
               payerMemberId,
               createdByMemberId,
               splitMode: 'per_item',
+              discountAmount,
               taxPercent: Number.parseFloat(taxPercentText) || 0,
               servicePercent: Number.parseFloat(servicePercentText) || 0,
               items: items.map((item) => ({
@@ -403,6 +407,21 @@ export default function AddEditSubTripSheet({
             </label>
           </div>
         )}
+
+        {/* Diskon / Promo / Voucher (Opsional) */}
+        <label className="flex flex-col gap-1.5">
+          <span className="font-inter text-xs font-semibold text-sub">🏷️ Diskon / Promo / Voucher (Opsional)</span>
+          <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
+            <span className="font-mono text-sm text-sub">Rp</span>
+            <input
+              value={discountText}
+              onChange={(e) => setDiscountText(formatNumberWithCommas(e.target.value))}
+              inputMode="numeric"
+              placeholder="0 (misal: 25,000)"
+              className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
+            />
+          </div>
+        </label>
 
         <div className="flex flex-col gap-1.5">
           <span className="font-inter text-xs font-semibold text-sub">Dibayar oleh</span>

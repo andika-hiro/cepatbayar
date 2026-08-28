@@ -17,6 +17,7 @@ export default function SubTripDetailScreen() {
   const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
   const [sheetMode, setSheetMode] = useState<'create' | 'edit' | null>(null);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
+  const [previewProof, setPreviewProof] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,11 +96,14 @@ export default function SubTripDetailScreen() {
 
       <div className="rounded-card bg-accent px-4 py-4 text-onAccent">
         <div className="font-inter text-xs font-medium text-onAccentSoft">Total dibayar {subTrip.payerName}</div>
-        <div className="mt-1.5 font-mono text-xl font-semibold">{formatRupiah(subTrip.amount)}</div>
-      </div>
-
-      <div className="flex h-24 items-center justify-center rounded-card border border-dashed border-border font-inter text-xs text-sub">
-        foto struk
+        <div className="mt-1.5 flex items-baseline justify-between">
+          <span className="font-mono text-xl font-semibold">{formatRupiah(subTrip.amount)}</span>
+          {subTrip.discountAmount && subTrip.discountAmount > 0 ? (
+            <span className="rounded bg-white/20 px-2 py-0.5 font-inter text-[11px] font-bold">
+              🏷️ Hemat {formatRupiah(subTrip.discountAmount)}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {subTrip.splitMode === 'per_item' && (
@@ -148,6 +152,18 @@ export default function SubTripDetailScreen() {
                     <div className="mt-0.5 font-inter text-[10.5px] font-medium text-accent">
                       {d.depositNote}
                     </div>
+                  )}
+                  {d.proofImage && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPreviewProof(d.proofImage!);
+                      }}
+                      className="mt-1 text-left font-inter text-[10.5px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                    >
+                      📸 Lihat Bukti Transfer
+                    </button>
                   )}
                 </div>
               </div>
@@ -228,6 +244,35 @@ export default function SubTripDetailScreen() {
         saldoData={saldoData}
         onRefresh={load}
       />
+
+      {/* Bukti Transfer Modal Preview */}
+      {previewProof && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-5 cursor-pointer"
+          onClick={() => setPreviewProof(null)}
+        >
+          <div className="relative flex flex-col items-center gap-3 rounded-card bg-surface p-4 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full">
+              <span className="font-manrope text-sm font-bold text-text">Bukti Transfer</span>
+              <button
+                type="button"
+                onClick={() => setPreviewProof(null)}
+                className="font-inter text-xs font-bold text-sub hover:text-text"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+            <img src={previewProof} alt="Bukti Transfer" className="w-full max-h-[380px] rounded-lg object-contain bg-black/10" />
+            <a
+              href={previewProof}
+              download="bukti_transfer.png"
+              className="w-full text-center rounded-pill bg-accent py-2 font-inter text-xs font-bold text-onAccent shadow-sm"
+            >
+              ⬇️ Download Bukti
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

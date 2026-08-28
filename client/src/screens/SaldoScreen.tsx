@@ -20,6 +20,8 @@ export default function SaldoScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
+  const [previewQris, setPreviewQris] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
@@ -183,30 +185,90 @@ export default function SaldoScreen() {
                   </div>
                 )}
 
-                {/* Account info section */}
-                <div className="flex items-center justify-between rounded-md bg-surfaceAlt px-3 py-2">
-                  <div className="font-inter text-xs text-sub">Transfer ke:</div>
-                  {debt.accounts.length > 0 ? (
-                    debt.accounts.length === 1 ? (
-                      <div className="font-mono text-xs font-semibold text-text">
-                        {selectedAccount.label}: {selectedAccount.accountNumber}
-                      </div>
+                {/* Account info section & WA Tagih button */}
+                <div className="flex flex-col gap-2 rounded-md bg-surfaceAlt px-3 py-2">
+                  <div className="flex items-center justify-between">
+                    <div className="font-inter text-xs text-sub">Transfer ke:</div>
+                    {debt.accounts.length > 0 ? (
+                      debt.accounts.length === 1 ? (
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-text">
+                            {selectedAccount.label}: {selectedAccount.accountNumber}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedAccount.accountNumber);
+                              setCopiedKey(`${debt.id}-${selectedAccount.id}`);
+                              setTimeout(() => setCopiedKey(null), 2000);
+                            }}
+                            className="rounded border border-border px-1.5 py-0.5 font-inter text-[10px] font-medium text-sub hover:bg-surface active:scale-95 transition-all"
+                            title="Salin nomor rekening"
+                          >
+                            {copiedKey === `${debt.id}-${selectedAccount.id}` ? '✓ Tersalin' : '📋 Salin'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={selectedAccount.id}
+                            onChange={(e) => setSelectedAccounts({ ...selectedAccounts, [debt.id]: Number(e.target.value) })}
+                            className="rounded border border-border bg-surface px-2 py-1 font-mono text-xs text-text"
+                          >
+                            {debt.accounts.map((acc) => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.label}: {acc.accountNumber} {acc.isDefault ? '(Default)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(selectedAccount.accountNumber);
+                              setCopiedKey(`${debt.id}-${selectedAccount.id}`);
+                              setTimeout(() => setCopiedKey(null), 2000);
+                            }}
+                            className="rounded border border-border px-1.5 py-0.5 font-inter text-[10px] font-medium text-sub hover:bg-surface active:scale-95 transition-all"
+                            title="Salin nomor rekening"
+                          >
+                            {copiedKey === `${debt.id}-${selectedAccount.id}` ? '✓ Tersalin' : '📋 Salin'}
+                          </button>
+                        </div>
+                      )
                     ) : (
-                      <select
-                        value={selectedAccount.id}
-                        onChange={(e) => setSelectedAccounts({ ...selectedAccounts, [debt.id]: Number(e.target.value) })}
-                        className="rounded border border-border bg-surface px-2 py-1 font-mono text-xs text-text"
+                      <div className="font-inter text-xs italic text-sub">Belum ada info rekening</div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-border/50 pt-1.5">
+                    {selectedAccount?.qrisImage ? (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewQris(selectedAccount.qrisImage!)}
+                        className="rounded bg-teal-500/15 px-2 py-1 font-inter text-[11px] font-bold text-teal-600 dark:text-teal-400 hover:opacity-85"
                       >
-                        {debt.accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.label}: {acc.accountNumber} {acc.isDefault ? '(Default)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    )
-                  ) : (
-                    <div className="font-inter text-xs italic text-sub">Belum ada info rekening</div>
-                  )}
+                        📸 Scan QRIS
+                      </button>
+                    ) : (
+                      <div />
+                    )}
+
+                    {/* 1-on-1 WA Reminder Button */}
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `Halo ${debt.debtorName}! 👋\nMau reminder tagihan trip *${trip.name}*:\n• *${debt.subTripName}*: ${formatRupiah(debt.amount)}${
+                          selectedAccount ? `\nTransfer ke ${selectedAccount.label}: ${selectedAccount.accountNumber} a/n ${debt.creditorName}` : ''
+                        }\n\nCek rincian trip di: ${window.location.origin}/t/${publicId}/ringkasan`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 rounded bg-[#25D366]/15 px-2 py-1 font-inter text-[11px] font-bold text-[#128C7E] dark:text-[#25D366] hover:bg-[#25D366]/25 transition-colors"
+                      title="Kirim pesan tagihan personal via WhatsApp"
+                    >
+                      <span>💬</span>
+                      <span>Tagih via WA</span>
+                    </a>
+                  </div>
                 </div>
 
                 {/* Action swipe component */}
@@ -372,6 +434,35 @@ export default function SaldoScreen() {
         saldoData={saldoData}
         onRefresh={load}
       />
+
+      {/* QRIS Full Preview Modal */}
+      {previewQris && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-5 cursor-pointer"
+          onClick={() => setPreviewQris(null)}
+        >
+          <div className="relative flex flex-col items-center gap-3 rounded-card bg-surface p-4 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full">
+              <span className="font-manrope text-sm font-bold text-text">QRIS Pembayaran</span>
+              <button
+                type="button"
+                onClick={() => setPreviewQris(null)}
+                className="font-inter text-xs font-bold text-sub hover:text-text"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+            <img src={previewQris} alt="QRIS Code" className="w-full max-h-[350px] rounded-lg object-contain bg-white p-2" />
+            <a
+              href={previewQris}
+              download="qris_cepatbayar.png"
+              className="w-full text-center rounded-pill bg-accent py-2 font-inter text-xs font-bold text-onAccent shadow-sm"
+            >
+              ⬇️ Download QRIS
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

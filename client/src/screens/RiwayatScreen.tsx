@@ -63,13 +63,23 @@ export default function RiwayatScreen() {
           </div>
           <div className="mt-1 font-inter text-xs text-sub">Tiap sub trip punya tagihan sendiri, gak digabung sama yang lain.</div>
         </div>
-        <button
-          onClick={() => setShareOpen(true)}
-          className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1.5 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90 active:scale-95 transition-transform"
-        >
-          <span>🔗</span>
-          <span>Bagikan</span>
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => navigate(`/t/${publicId}/statistik`)}
+            className="flex items-center gap-1 rounded-pill border border-border bg-surface px-2.5 py-1.5 font-inter text-xs font-semibold text-text shadow-sm hover:bg-surfaceAlt active:scale-95 transition-all"
+            title="Lihat Statistik Trip"
+          >
+            <span>📊</span>
+            <span className="hidden sm:inline">Statistik</span>
+          </button>
+          <button
+            onClick={() => setShareOpen(true)}
+            className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1.5 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90 active:scale-95 transition-transform"
+          >
+            <span>🔗</span>
+            <span>Bagikan</span>
+          </button>
+        </div>
       </div>
 
 

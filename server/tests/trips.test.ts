@@ -260,3 +260,76 @@ describe('GET /api/trips/:publicId/summary', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /api/trips/:publicId/analytics', () => {
+  it('returns complete visual analytics data, category breakdown, daily spending, awards, and settlement progress', async () => {
+    const { cookie } = await createAuthedUser('analytics-test@example.com');
+    const createRes = await request(app).post('/api/trips').set('Cookie', cookie).send({
+      name: 'Trip Liburan', destination: 'Lombok', startDate: '2026-08-10', endDate: '2026-08-15', members: ['Ando', 'Hiro'],
+    });
+    const { publicId } = createRes.body;
+    const [trip] = await db.select().from(trips).where(eq(trips.publicId, publicId));
+    const [ando, hiro] = await db.select().from(tripMembersTable).where(eq(tripMembersTable.tripId, trip.id));
+
+    // SubTrip 1: Makan (100,000)
+    await db.insert(subTrips).values({
+      tripId: trip.id,
+      name: 'Makan Malam',
+      category: 'makan',
+      date: '2026-08-10',
+      payerMemberId: ando.id,
+      amount: 100000,
+      createdByMemberId: ando.id,
+    });
+    const [st1] = await db.select().from(subTrips).where(eq(subTrips.name, 'Makan Malam'));
+    await db.insert(debts).values({ subTripId: st1.id, memberId: hiro.id, amount: 50000, settled: true });
+
+    // SubTrip 2: Transport (50,000)
+    await db.insert(subTrips).values({
+      tripId: trip.id,
+      name: 'Grab Car',
+      category: 'transport',
+      date: '2026-08-11',
+      payerMemberId: hiro.id,
+      amount: 50000,
+      createdByMemberId: hiro.id,
+    });
+    const [st2] = await db.select().from(subTrips).where(eq(subTrips.name, 'Grab Car'));
+    await db.insert(debts).values({ subTripId: st2.id, memberId: ando.id, amount: 25000, settled: false });
+
+    const res = await request(app).get(`/api/trips/${publicId}/analytics`);
+    expect(res.status).toBe(200);
+    expect(res.body.totalExpense).toBe(150000);
+    expect(res.body.subTripCount).toBe(2);
+    expect(res.body.memberCount).toBe(2);
+
+    // Category breakdown
+    expect(res.body.categoryBreakdown).toHaveLength(2);
+    expect(res.body.categoryBreakdown[0].category).toBe('makan');
+    expect(res.body.categoryBreakdown[0].total).toBe(100000);
+    expect(res.body.categoryBreakdown[0].percentage).toBe(67);
+
+    // Daily spending
+    expect(res.body.dailySpending).toHaveLength(2);
+    expect(res.body.dailySpending[0].date).toBe('2026-08-10');
+    expect(res.body.dailySpending[0].isPeak).toBe(true);
+
+    // Awards
+    expect(res.body.awards.topCreditor.name).toBe('Ando');
+    expect(res.body.awards.topCreditor.amount).toBe(100000);
+    expect(res.body.awards.mostExpensiveSubTrip.name).toBe('Makan Malam');
+    expect(res.body.awards.averagePerMember).toBe(75000);
+
+    // Settlement Progress
+    expect(res.body.settlementProgress.totalDebtsAmount).toBe(75000);
+    expect(res.body.settlementProgress.settledDebtsAmount).toBe(50000);
+    expect(res.body.settlementProgress.unsettledDebtsAmount).toBe(25000);
+    expect(res.body.settlementProgress.settledPercentage).toBe(67);
+  });
+
+  it('returns 404 for an unknown publicId', async () => {
+    const res = await request(app).get('/api/trips/does-not-exist/analytics');
+    expect(res.status).toBe(404);
+  });
+});
+

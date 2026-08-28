@@ -87,6 +87,14 @@ export default function RingkasanScreen() {
         </div>
         <div className="flex flex-none items-center gap-1.5">
           <button
+            onClick={() => navigate(`/t/${publicId}/statistik`)}
+            className="flex items-center gap-1 rounded-pill border border-border bg-surface px-2.5 py-1.5 font-inter text-xs font-semibold text-text shadow-sm hover:bg-surfaceAlt active:scale-95 transition-all"
+            title="Lihat Statistik Trip"
+          >
+            <span>📊</span>
+            <span className="hidden sm:inline">Statistik</span>
+          </button>
+          <button
             onClick={() => setShareOpen(true)}
             className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1.5 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90 active:scale-95 transition-transform"
           >

@@ -12,6 +12,7 @@ import KelolaAnggotaScreen from './screens/KelolaAnggotaScreen';
 import RekeningDetailScreen from './screens/RekeningDetailScreen';
 import WaPreviewScreen from './screens/WaPreviewScreen';
 import ProfilePlaceholderScreen from './screens/ProfilePlaceholderScreen';
+import StatistikScreen from './screens/StatistikScreen';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
       <Route path="/trip/new" element={<NewTripScreen />} />
       <Route path="/t/:publicId" element={<IdentityPickerScreen />} />
       <Route path="/t/:publicId/ringkasan" element={<RingkasanScreen />} />
+      <Route path="/t/:publicId/statistik" element={<StatistikScreen />} />
       <Route path="/t/:publicId/riwayat" element={<RiwayatScreen />} />
       <Route path="/t/:publicId/subtrip/:subTripId" element={<SubTripDetailScreen />} />
       <Route path="/t/:publicId/saldo" element={<SaldoScreen />} />

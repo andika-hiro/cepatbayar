@@ -25,13 +25,14 @@ export default function MemberDetailSheet({
 }: MemberDetailSheetProps) {
   const [settledDebts, setSettledDebts] = useState<SettledDebtItem[]>([]);
   const [loadingSettled, setLoadingSettled] = useState(false);
+  const [previewProof, setPreviewProof] = useState<string | null>(null);
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
-  async function handleToggleSettled(subTripId: number, debtId: number, currentSettled: boolean) {
+  async function handleToggleSettled(subTripId: number, debtId: number, currentSettled: boolean, proofImage?: string | null) {
     if (!publicId) return;
     try {
-      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled, currentMemberId);
+      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled, currentMemberId, proofImage);
       if (onRefresh) onRefresh();
     } catch {
       alert('Gagal memperbarui status pelunasan');
@@ -181,6 +182,18 @@ export default function MemberDetailSheet({
                       💡 {d.depositNote}
                     </div>
                   )}
+                  <div className="flex items-center justify-between gap-2">
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(
+                        `Halo ${d.debtorName}! 👋\nMau reminder tagihan trip *${d.subTripName}* sebesar ${formatRupiah(d.amount)}.\nCek rinciannya di: ${window.location.origin}/t/${publicId}/ringkasan`
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 rounded bg-[#25D366]/15 px-2 py-1 font-inter text-[11px] font-bold text-[#128C7E] dark:text-[#25D366] hover:bg-[#25D366]/25 transition-colors"
+                    >
+                      <span>💬 Tagih via WA</span>
+                    </a>
+                  </div>
                   <SwipeToConfirm
                     label="Geser tandai lunas 👉"
                     confirmedLabel="✓ Lunas"
@@ -232,6 +245,15 @@ export default function MemberDetailSheet({
                         Dilunaskan oleh {d.settledByMemberName}
                       </span>
                     )}
+                    {d.proofImage && (
+                      <button
+                        type="button"
+                        onClick={() => setPreviewProof(d.proofImage!)}
+                        className="mt-1 text-left font-inter text-[10.5px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                      >
+                        📸 Lihat Bukti Transfer
+                      </button>
+                    )}
                   </div>
                   <div className="flex flex-col items-end">
                     <span className="font-mono text-xs font-bold text-pos">✓ {formatRupiah(d.amount)}</span>
@@ -243,6 +265,35 @@ export default function MemberDetailSheet({
           </div>
         </div>
       </div>
+
+      {/* Bukti Transfer Modal Preview */}
+      {previewProof && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-5 cursor-pointer"
+          onClick={() => setPreviewProof(null)}
+        >
+          <div className="relative flex flex-col items-center gap-3 rounded-card bg-surface p-4 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full">
+              <span className="font-manrope text-sm font-bold text-text">Bukti Transfer</span>
+              <button
+                type="button"
+                onClick={() => setPreviewProof(null)}
+                className="font-inter text-xs font-bold text-sub hover:text-text"
+              >
+                ✕ Tutup
+              </button>
+            </div>
+            <img src={previewProof} alt="Bukti Transfer" className="w-full max-h-[380px] rounded-lg object-contain bg-black/10" />
+            <a
+              href={previewProof}
+              download="bukti_transfer.png"
+              className="w-full text-center rounded-pill bg-accent py-2 font-inter text-xs font-bold text-onAccent shadow-sm"
+            >
+              ⬇️ Download Bukti
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

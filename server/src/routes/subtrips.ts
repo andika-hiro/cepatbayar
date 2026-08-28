@@ -35,6 +35,7 @@ const totalModeSchema = z.object({
   createdByMemberId: z.number().int().positive(),
   splitMode: z.literal('total'),
   amount: z.number().int().positive(),
+  discountAmount: z.number().int().min(0).default(0),
   participantMemberIds: z.array(z.number().int().positive()).min(1),
 });
 
@@ -45,6 +46,7 @@ const perItemModeSchema = z.object({
   payerMemberId: z.number().int().positive(),
   createdByMemberId: z.number().int().positive(),
   splitMode: z.literal('per_item'),
+  discountAmount: z.number().int().min(0).default(0),
   taxPercent: z.number().min(0).max(100).default(0),
   servicePercent: z.number().min(0).max(100).default(0),
   items: z.array(itemInputSchema).min(1),
@@ -125,13 +127,14 @@ router.post<{ publicId: string }>('/', createSubTripLimiter, async (req, res) =>
       return;
     }
 
-    const shares = computeEqualShares(data.amount, data.participantMemberIds, data.payerMemberId);
+    const effectiveAmount = Math.max(0, data.amount - (data.discountAmount ?? 0));
+    const shares = computeEqualShares(effectiveAmount, data.participantMemberIds, data.payerMemberId);
     const payerParticipates = data.participantMemberIds.includes(data.payerMemberId);
 
     const subTripId = await db.transaction(async (tx) => {
       const [result] = await tx.insert(subTrips).values({
         tripId: trip.id, name: data.name, category: data.category, date: data.date,
-        payerMemberId: data.payerMemberId, amount: data.amount, payerParticipates,
+        payerMemberId: data.payerMemberId, amount: data.amount, discountAmount: data.discountAmount ?? 0, payerParticipates,
         createdByMemberId: data.createdByMemberId, splitMode: 'total',
       });
       const newSubTripId = result.insertId;
@@ -158,13 +161,13 @@ router.post<{ publicId: string }>('/', createSubTripLimiter, async (req, res) =>
     return;
   }
 
-  const split = computeItemBasedShares(data.items, data.taxPercent, data.servicePercent, data.payerMemberId);
+  const split = computeItemBasedShares(data.items, data.taxPercent, data.servicePercent, data.payerMemberId, data.discountAmount ?? 0);
   const payerParticipates = data.items.some((item) => item.participants.some((p) => p.memberId === data.payerMemberId));
 
   const subTripId = await db.transaction(async (tx) => {
     const [insertResult] = await tx.insert(subTrips).values({
       tripId: trip.id, name: data.name, category: data.category, date: data.date,
-      payerMemberId: data.payerMemberId, amount: split.grandTotal, payerParticipates,
+      payerMemberId: data.payerMemberId, amount: split.grandTotal, discountAmount: split.discountAmount, payerParticipates,
       createdByMemberId: data.createdByMemberId, splitMode: 'per_item',
       taxPercent: data.taxPercent, servicePercent: data.servicePercent,
     });
@@ -363,6 +366,7 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
     payerMemberId: subTrip.payerMemberId,
     payerName: payer?.name ?? '',
     amount: subTrip.amount,
+    discountAmount: subTrip.discountAmount ?? 0,
     payerParticipates: subTrip.payerParticipates,
     createdByMemberId: subTrip.createdByMemberId,
     splitMode: subTrip.splitMode,
@@ -377,6 +381,7 @@ router.get<{ publicId: string; subTripId: string }>('/:subTripId', async (req, r
       settled: d.settled,
       settledByMemberId: d.settledByMemberId,
       settledByMemberName: d.settledByMemberName,
+      proofImage: d.proofImage,
       depositNote: d.depositNote,
       coveredByDeposit: d.coveredByDeposit,
     })),
@@ -418,7 +423,8 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
       return;
     }
 
-    const shares = computeEqualShares(data.amount, data.participantMemberIds, data.payerMemberId);
+    const effectiveAmount = Math.max(0, data.amount - (data.discountAmount ?? 0));
+    const shares = computeEqualShares(effectiveAmount, data.participantMemberIds, data.payerMemberId);
     const payerParticipates = data.participantMemberIds.includes(data.payerMemberId);
     const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, existing.id));
     const reconciled = reconcileDebts(
@@ -429,7 +435,7 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
     await db.transaction(async (tx) => {
       await tx
         .update(subTrips)
-        .set({ name: data.name, category: data.category, date: data.date, payerMemberId: data.payerMemberId, amount: data.amount, payerParticipates, updatedByMemberId })
+        .set({ name: data.name, category: data.category, date: data.date, payerMemberId: data.payerMemberId, amount: data.amount, discountAmount: data.discountAmount ?? 0, payerParticipates })
         .where(eq(subTrips.id, existing.id));
 
       for (const del of reconciled.toDelete) await tx.delete(debts).where(eq(debts.id, del.id));
@@ -454,7 +460,7 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
     return;
   }
 
-  const split = computeItemBasedShares(data.items, data.taxPercent, data.servicePercent, data.payerMemberId);
+  const split = computeItemBasedShares(data.items, data.taxPercent, data.servicePercent, data.payerMemberId, data.discountAmount ?? 0);
   const payerParticipates = data.items.some((item) => item.participants.some((p) => p.memberId === data.payerMemberId));
   const existingDebtRows = await db.select().from(debts).where(eq(debts.subTripId, existing.id));
   const reconciled = reconcileDebts(
@@ -467,7 +473,7 @@ router.patch<{ publicId: string; subTripId: string }>('/:subTripId', attachUserI
       .update(subTrips)
       .set({
         name: data.name, category: data.category, date: data.date, payerMemberId: data.payerMemberId,
-        amount: split.grandTotal, payerParticipates, taxPercent: data.taxPercent, servicePercent: data.servicePercent, updatedByMemberId,
+        amount: split.grandTotal, discountAmount: split.discountAmount, payerParticipates, taxPercent: data.taxPercent, servicePercent: data.servicePercent,
       })
       .where(eq(subTrips.id, existing.id));
 
@@ -523,6 +529,7 @@ router.delete<{ publicId: string; subTripId: string }>('/:subTripId', attachUser
 const toggleDebtSchema = z.object({
   settled: z.boolean(),
   settledByMemberId: z.number().int().positive().optional(),
+  proofImage: z.string().optional(),
 });
 
 router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTripId/debts/:debtId', async (req, res) => {
@@ -558,6 +565,7 @@ router.patch<{ publicId: string; subTripId: string; debtId: string }>('/:subTrip
       settled: parsed.data.settled,
       settledAt: parsed.data.settled ? new Date() : null,
       settledByMemberId: settledByMemberId,
+      proofImage: parsed.data.settled ? (parsed.data.proofImage ?? debt.proofImage) : null,
     })
     .where(eq(debts.id, debtId));
 

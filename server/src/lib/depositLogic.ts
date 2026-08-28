@@ -11,6 +11,7 @@ export interface RawDebt {
   settled?: boolean;
   settledByMemberId?: number | null;
   settledByMemberName?: string | null;
+  proofImage?: string | null;
 }
 
 export interface RawDeposit {

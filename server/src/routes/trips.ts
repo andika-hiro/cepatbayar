@@ -226,4 +226,174 @@ router.get('/:publicId/summary', async (req, res) => {
   res.json({ members: memberSummaries, tripTotal });
 });
 
+// GET /api/trips/:publicId/analytics
+router.get('/:publicId/analytics', async (req, res) => {
+  const trip = await getTripByPublicId(req.params.publicId);
+  if (!trip) {
+    res.status(404).json({ error: 'trip_not_found' });
+    return;
+  }
+
+  const members = await db.select().from(tripMembers).where(eq(tripMembers.tripId, trip.id));
+  const memberMap = new Map(members.map((m) => [m.id, m.name]));
+
+  const allSubTrips = await db.select().from(subTrips).where(eq(subTrips.tripId, trip.id));
+  const allDebts = await db
+    .select({
+      id: debts.id,
+      subTripId: debts.subTripId,
+      memberId: debts.memberId,
+      amount: debts.amount,
+      settled: debts.settled,
+      payerMemberId: subTrips.payerMemberId,
+    })
+    .from(debts)
+    .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
+    .where(eq(subTrips.tripId, trip.id));
+
+  const totalExpense = allSubTrips.reduce((sum, st) => sum + st.amount, 0);
+
+  // 1. Category Breakdown
+  const categoryMeta: Record<string, { label: string; color: string }> = {
+    makan: { label: 'Makan & Minum', color: '#0D9488' },
+    transport: { label: 'Transportasi', color: '#F59E0B' },
+    nginap: { label: 'Penginapan', color: '#8B5CF6' },
+    tiket_wisata: { label: 'Tiket & Wisata', color: '#EC4899' },
+    lainnya: { label: 'Lain-lain', color: '#6B7280' },
+  };
+
+  const categoryTotals = new Map<string, { total: number; count: number }>();
+  for (const cat of Object.keys(categoryMeta)) {
+    categoryTotals.set(cat, { total: 0, count: 0 });
+  }
+
+  for (const st of allSubTrips) {
+    const curr = categoryTotals.get(st.category) ?? { total: 0, count: 0 };
+    curr.total += st.amount;
+    curr.count += 1;
+    categoryTotals.set(st.category, curr);
+  }
+
+  const categoryBreakdown = Array.from(categoryTotals.entries())
+    .map(([cat, data]) => ({
+      category: cat,
+      label: categoryMeta[cat]?.label ?? cat,
+      color: categoryMeta[cat]?.color ?? '#6B7280',
+      total: data.total,
+      count: data.count,
+      percentage: totalExpense > 0 ? Math.round((data.total / totalExpense) * 100) : 0,
+    }))
+    .filter((c) => c.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  // 2. Daily Spending Timeline
+  const dailyMap = new Map<string, number>();
+  for (const st of allSubTrips) {
+    dailyMap.set(st.date, (dailyMap.get(st.date) ?? 0) + st.amount);
+  }
+
+  const sortedDates = Array.from(dailyMap.keys()).sort();
+  const maxDaySpending = Math.max(...Array.from(dailyMap.values()), 0);
+
+  const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const formatIsoDate = (iso: string) => {
+    const [, month, day] = iso.split('-');
+    return `${Number(day)} ${MONTHS_SHORT[Number(month) - 1]}`;
+  };
+
+  const dailySpending = sortedDates.map((date) => {
+    const total = dailyMap.get(date) ?? 0;
+    return {
+      date,
+      formattedDate: formatIsoDate(date),
+      total,
+      isPeak: total > 0 && total === maxDaySpending,
+    };
+  });
+
+  // 3. Member Analytics & Leaderboards
+  const memberPaidMap = new Map<number, number>();
+  const memberConsumedMap = new Map<number, number>();
+  for (const m of members) {
+    memberPaidMap.set(m.id, 0);
+    memberConsumedMap.set(m.id, 0);
+  }
+
+  for (const st of allSubTrips) {
+    memberPaidMap.set(st.payerMemberId, (memberPaidMap.get(st.payerMemberId) ?? 0) + st.amount);
+  }
+
+  for (const d of allDebts) {
+    memberConsumedMap.set(d.memberId, (memberConsumedMap.get(d.memberId) ?? 0) + d.amount);
+  }
+
+  let topCreditorMember: { memberId: number; name: string; amount: number } | null = null;
+  let topConsumerMember: { memberId: number; name: string; amount: number } | null = null;
+
+  for (const m of members) {
+    const paid = memberPaidMap.get(m.id) ?? 0;
+    const consumed = memberConsumedMap.get(m.id) ?? 0;
+    if (paid > 0 && (!topCreditorMember || paid > topCreditorMember.amount)) {
+      topCreditorMember = { memberId: m.id, name: m.name, amount: paid };
+    }
+    if (consumed > 0 && (!topConsumerMember || consumed > topConsumerMember.amount)) {
+      topConsumerMember = { memberId: m.id, name: m.name, amount: consumed };
+    }
+  }
+
+  let mostExpensiveSubTrip: { id: number; name: string; amount: number; category: string; date: string } | null = null;
+  for (const st of allSubTrips) {
+    if (!mostExpensiveSubTrip || st.amount > mostExpensiveSubTrip.amount) {
+      mostExpensiveSubTrip = {
+        id: st.id,
+        name: st.name,
+        amount: st.amount,
+        category: categoryMeta[st.category]?.label ?? st.category,
+        date: formatIsoDate(st.date),
+      };
+    }
+  }
+
+  // 4. Settlement Progress
+  let totalDebtsAmount = 0;
+  let settledDebtsAmount = 0;
+  let totalDebtsCount = allDebts.length;
+  let settledDebtsCount = 0;
+
+  for (const d of allDebts) {
+    totalDebtsAmount += d.amount;
+    if (d.settled) {
+      settledDebtsAmount += d.amount;
+      settledDebtsCount += 1;
+    }
+  }
+
+  const unsettledDebtsAmount = totalDebtsAmount - settledDebtsAmount;
+  const unsettledDebtsCount = totalDebtsCount - settledDebtsCount;
+  const settledPercentage = totalDebtsAmount > 0 ? Math.round((settledDebtsAmount / totalDebtsAmount) * 100) : 100;
+
+  res.json({
+    totalExpense,
+    subTripCount: allSubTrips.length,
+    memberCount: members.length,
+    categoryBreakdown,
+    dailySpending,
+    awards: {
+      topCreditor: topCreditorMember,
+      topConsumer: topConsumerMember,
+      mostExpensiveSubTrip,
+      averagePerMember: members.length > 0 ? Math.round(totalExpense / members.length) : 0,
+    },
+    settlementProgress: {
+      totalDebtsAmount,
+      settledDebtsAmount,
+      unsettledDebtsAmount,
+      settledPercentage,
+      totalDebtsCount,
+      settledDebtsCount,
+      unsettledDebtsCount,
+    },
+  });
+});
+
 export default router;

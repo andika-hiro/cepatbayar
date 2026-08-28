@@ -120,6 +120,7 @@ router.get('/:publicId/saldo', async (req, res) => {
         label: a.label,
         accountNumber: a.accountNumber,
         isDefault: a.isDefault,
+        qrisImage: a.qrisImage,
       })),
     }));
 
@@ -128,6 +129,7 @@ router.get('/:publicId/saldo', async (req, res) => {
     unsettledDebts: unsettledDebtsWithAccounts,
     deposits: dynamicResult.depositSummaries,
     rawDeposits: formattedDeposits,
+    depositHistory: formattedDeposits,
   });
 });
 
@@ -152,26 +154,28 @@ router.get('/:publicId/settled-debts', async (req, res) => {
       amount: debts.amount,
       settledAt: debts.settledAt,
       settledByMemberId: debts.settledByMemberId,
+      proofImage: debts.proofImage,
     })
     .from(debts)
     .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
     .where(and(eq(subTrips.tripId, trip.id), eq(debts.settled, true)))
     .orderBy(desc(debts.settledAt));
 
-  const result = settledList.map(s => ({
-    id: s.id,
-    subTripName: s.subTripName,
-    debtorId: s.debtorId,
-    debtorName: memberMap.get(s.debtorId) || 'Unknown',
-    creditorId: s.creditorId,
-    creditorName: memberMap.get(s.creditorId) || 'Unknown',
-    amount: s.amount,
-    settledAt: s.settledAt,
-    settledByMemberId: s.settledByMemberId,
-    settledByMemberName: s.settledByMemberId ? memberMap.get(s.settledByMemberId) || null : null,
-  }));
-
-  res.json(result);
+  res.json(
+    settledList.map(s => ({
+      id: s.id,
+      subTripName: s.subTripName,
+      debtorId: s.debtorId,
+      debtorName: memberMap.get(s.debtorId) || 'Unknown',
+      creditorId: s.creditorId,
+      creditorName: memberMap.get(s.creditorId) || 'Unknown',
+      amount: s.amount,
+      settledAt: s.settledAt ? s.settledAt.toISOString() : '',
+      settledByMemberId: s.settledByMemberId,
+      settledByMemberName: s.settledByMemberId ? memberMap.get(s.settledByMemberId) || null : null,
+      proofImage: s.proofImage || null,
+    }))
+  );
 });
 
 // POST /api/trips/:publicId/deposits

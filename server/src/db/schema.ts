@@ -1,4 +1,4 @@
-import { mysqlTable, int, varchar, timestamp, date, mysqlEnum, boolean, decimal, foreignKey } from 'drizzle-orm/mysql-core';
+import { mysqlTable, int, varchar, timestamp, date, mysqlEnum, boolean, decimal, foreignKey, text } from 'drizzle-orm/mysql-core';
 
 export const users = mysqlTable('users', {
   id: int('id').autoincrement().primaryKey(),
@@ -38,18 +38,17 @@ export const subTrips = mysqlTable('sub_trips', {
   id: int('id').autoincrement().primaryKey(),
   tripId: int('trip_id').notNull().references(() => trips.id),
   name: varchar('name', { length: 255 }).notNull(),
-  category: mysqlEnum('category', ['makan', 'transport', 'nginap', 'tiket_wisata', 'lainnya']).notNull(),
-  date: date('date', { mode: 'string' }).notNull(),
+  category: varchar('category', { length: 32 }).notNull().default('lainnya'),
+  date: varchar('date', { length: 10 }).notNull(),
   payerMemberId: int('payer_member_id').notNull().references(() => tripMembers.id),
   amount: int('amount').notNull(),
+  discountAmount: int('discount_amount').notNull().default(0),
   payerParticipates: boolean('payer_participates').notNull().default(true),
-  splitMode: mysqlEnum('split_mode', ['total', 'per_item']).notNull().default('total'),
-  taxPercent: decimal('tax_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
-  servicePercent: decimal('service_percent', { precision: 5, scale: 2, mode: 'number' }).notNull().default(0),
   createdByMemberId: int('created_by_member_id').notNull().references(() => tripMembers.id),
+  splitMode: varchar('split_mode', { length: 16 }).notNull().default('total'),
+  taxPercent: int('tax_percent').notNull().default(0),
+  servicePercent: int('service_percent').notNull().default(0),
   createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedByMemberId: int('updated_by_member_id'),
-  updatedAt: timestamp('updated_at').notNull().defaultNow().onUpdateNow(),
 });
 
 export const debts = mysqlTable('debts', {
@@ -60,6 +59,7 @@ export const debts = mysqlTable('debts', {
   settled: boolean('settled').notNull().default(false),
   settledAt: timestamp('settled_at'),
   settledByMemberId: int('settled_by_member_id').references(() => tripMembers.id),
+  proofImage: text('proof_image'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
@@ -89,6 +89,7 @@ export const memberAccounts = mysqlTable('member_accounts', {
   label: varchar('label', { length: 255 }).notNull(),
   accountNumber: varchar('account_number', { length: 255 }).notNull(),
   isDefault: boolean('is_default').notNull().default(false),
+  qrisImage: text('qris_image'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

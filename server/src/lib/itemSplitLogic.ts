@@ -14,6 +14,7 @@ export interface ItemBasedSplitResult {
   subtotal: number;
   taxTotal: number;
   serviceCharge: number;
+  discountAmount: number;
   grandTotal: number;
 }
 
@@ -22,6 +23,7 @@ export function computeItemBasedShares(
   taxPercent: number,
   servicePercent: number,
   payerMemberId: number,
+  discountAmount: number = 0,
 ): ItemBasedSplitResult {
   const shares = new Map<number, number>();
   let subtotal = 0;
@@ -48,6 +50,16 @@ export function computeItemBasedShares(
     }
   }
 
-  const grandTotal = subtotal + taxTotal + serviceCharge;
-  return { shares, subtotal, taxTotal, serviceCharge, grandTotal };
+  const rawGrandTotal = subtotal + taxTotal + serviceCharge;
+  const validDiscount = Math.min(rawGrandTotal, Math.max(0, discountAmount));
+  const grandTotal = Math.max(0, rawGrandTotal - validDiscount);
+
+  if (validDiscount > 0 && rawGrandTotal > 0) {
+    const ratio = grandTotal / rawGrandTotal;
+    for (const [debtor, share] of shares.entries()) {
+      shares.set(debtor, Math.ceil(share * ratio));
+    }
+  }
+
+  return { shares, subtotal, taxTotal, serviceCharge, discountAmount: validDiscount, grandTotal };
 }

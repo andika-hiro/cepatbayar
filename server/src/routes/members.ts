@@ -67,7 +67,7 @@ router.post('/:publicId/members/:memberId/accounts', async (req, res) => {
   if (!loaded) return;
   const { memberId } = loaded;
 
-  const { label, accountNumber, isDefault } = req.body;
+  const { label, accountNumber, isDefault, qrisImage } = req.body;
 
   if (!label || !accountNumber) {
     return res.status(400).json({ error: 'Label and accountNumber are required' });
@@ -83,9 +83,10 @@ router.post('/:publicId/members/:memberId/accounts', async (req, res) => {
     label,
     accountNumber,
     isDefault: !!isDefault,
+    qrisImage: qrisImage || null,
   });
 
-  res.status(201).json({ id: inserted[0].insertId, label, accountNumber, isDefault: !!isDefault });
+  res.status(201).json({ id: inserted[0].insertId, label, accountNumber, isDefault: !!isDefault, qrisImage: qrisImage || null });
 });
 
 // PATCH /api/trips/:publicId/members/:memberId/accounts/:accountId

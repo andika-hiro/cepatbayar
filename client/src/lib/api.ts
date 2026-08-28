@@ -66,6 +66,7 @@ export interface DebtItem {
   settled: boolean;
   settledByMemberId?: number | null;
   settledByMemberName?: string | null;
+  proofImage?: string | null;
   depositNote?: string;
   coveredByDeposit?: boolean;
 }
@@ -106,6 +107,7 @@ export interface SubTripDetail {
   payerMemberId: number;
   payerName: string;
   amount: number;
+  discountAmount?: number;
   payerParticipates: boolean;
   createdByMemberId: number;
   splitMode: SplitMode;
@@ -123,6 +125,7 @@ export interface TotalModeInput {
   createdByMemberId: number;
   splitMode: 'total';
   amount: number;
+  discountAmount?: number;
   participantMemberIds: number[];
 }
 
@@ -133,6 +136,7 @@ export interface PerItemModeInput {
   payerMemberId: number;
   createdByMemberId: number;
   splitMode: 'per_item';
+  discountAmount?: number;
   taxPercent: number;
   servicePercent: number;
   items: ItemInput[];
@@ -151,6 +155,7 @@ export interface MemberAccount {
   label: string;
   accountNumber: string;
   isDefault: boolean;
+  qrisImage?: string | null;
 }
 
 export interface UnsettledDebtItem {
@@ -209,6 +214,7 @@ export interface SettledDebtItem {
   settledAt: string;
   settledByMemberId?: number | null;
   settledByMemberName?: string | null;
+  proofImage?: string | null;
 }
 
 export class ApiError extends Error {
@@ -241,6 +247,49 @@ export interface OcrScanResult {
 }
 
 
+export interface CategoryBreakdown {
+  category: SubTripCategory;
+  label: string;
+  total: number;
+  percentage: number;
+  count: number;
+  color: string;
+}
+
+export interface DailySpending {
+  date: string;
+  formattedDate: string;
+  total: number;
+  isPeak: boolean;
+}
+
+export interface TripAwards {
+  topCreditor: { memberId: number; name: string; amount: number } | null;
+  topConsumer: { memberId: number; name: string; amount: number } | null;
+  mostExpensiveSubTrip: { id: number; name: string; amount: number; category: string; date: string } | null;
+  averagePerMember: number;
+}
+
+export interface SettlementProgress {
+  totalDebtsAmount: number;
+  settledDebtsAmount: number;
+  unsettledDebtsAmount: number;
+  settledPercentage: number;
+  totalDebtsCount: number;
+  settledDebtsCount: number;
+  unsettledDebtsCount: number;
+}
+
+export interface TripAnalyticsData {
+  totalExpense: number;
+  subTripCount: number;
+  memberCount: number;
+  categoryBreakdown: CategoryBreakdown[];
+  dailySpending: DailySpending[];
+  awards: TripAwards;
+  settlementProgress: SettlementProgress;
+}
+
 export const api = {
   me: () => request<CurrentUser>('/auth/me'),
   requestLink: (email: string, redirect?: string) =>
@@ -250,6 +299,7 @@ export const api = {
     request<TripSummary[]>('/trips/summary', { method: 'POST', body: JSON.stringify({ publicIds }) }),
   tripDetail: (publicId: string) => request<TripDetail>(`/trips/${publicId}`),
   tripSummary: (publicId: string) => request<TripSummaryDetail>(`/trips/${publicId}/summary`),
+  tripAnalytics: (publicId: string) => request<TripAnalyticsData>(`/trips/${publicId}/analytics`),
   listSubTrips: (publicId: string) => request<SubTripListItem[]>(`/trips/${publicId}/subtrips`),
   createSubTrip: (publicId: string, input: SubTripInput) =>
     request<{ id: number }>(`/trips/${publicId}/subtrips`, { method: 'POST', body: JSON.stringify(input) }),
@@ -265,10 +315,10 @@ export const api = {
       method: 'DELETE',
       headers: { 'X-Member-Id': String(memberId) },
     }),
-  toggleDebtSettled: (publicId: string, subTripId: number, debtId: number, settled: boolean, settledByMemberId?: number | null) =>
+  toggleDebtSettled: (publicId: string, subTripId: number, debtId: number, settled: boolean, settledByMemberId?: number | null, proofImage?: string | null) =>
     request<{ ok: true }>(`/trips/${publicId}/subtrips/${subTripId}/debts/${debtId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ settled, settledByMemberId }),
+      body: JSON.stringify({ settled, settledByMemberId, proofImage }),
       headers: settledByMemberId ? { 'X-Member-Id': String(settledByMemberId) } : undefined,
     }),
   createTrip: (input: { name: string; destination: string; startDate: string; endDate: string; members: string[] }) =>
@@ -280,11 +330,10 @@ export const api = {
   deleteDeposit: (publicId: string, depositId: number) =>
     request<{ success: true }>(`/trips/${publicId}/deposits/${depositId}`, { method: 'DELETE' }),
   addTripMember: (publicId: string, name: string) =>
-
     request<{ id: number; name: string }>(`/trips/${publicId}/members`, { method: 'POST', body: JSON.stringify({ name }) }),
   getMemberAccounts: (publicId: string, memberId: number) =>
     request<MemberAccount[]>(`/trips/${publicId}/members/${memberId}/accounts`),
-  addMemberAccount: (publicId: string, memberId: number, input: { label: string; accountNumber: string; isDefault?: boolean }) =>
+  addMemberAccount: (publicId: string, memberId: number, input: { label: string; accountNumber: string; isDefault?: boolean; qrisImage?: string | null }) =>
     request<MemberAccount>(`/trips/${publicId}/members/${memberId}/accounts`, { method: 'POST', body: JSON.stringify(input) }),
   setDefaultAccount: (publicId: string, memberId: number, accountId: number) =>
     request<{ success: true }>(`/trips/${publicId}/members/${memberId}/accounts/${accountId}`, { method: 'PATCH', body: JSON.stringify({ isDefault: true }) }),
