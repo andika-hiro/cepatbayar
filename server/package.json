@@ -1,7 +1,7 @@
 {
   "name": "cepatkan-bayar-server",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0-dev",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
