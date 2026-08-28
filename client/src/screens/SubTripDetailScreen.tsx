@@ -9,6 +9,7 @@ import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
 import SwipeToConfirm from '../components/SwipeToConfirm';
 import MemberDetailSheet from '../components/MemberDetailSheet';
 import SettleDebtModal, { type SettleDebtTarget } from '../components/SettleDebtModal';
+import ProofPreviewModal, { type RelatedSettledDebt } from '../components/ProofPreviewModal';
 
 export default function SubTripDetailScreen() {
   const { publicId, subTripId } = useParams<{ publicId: string; subTripId: string }>();
@@ -19,7 +20,10 @@ export default function SubTripDetailScreen() {
   const [sheetMode, setSheetMode] = useState<'create' | 'edit' | null>(null);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | null>(null);
-  const [previewProof, setPreviewProof] = useState<string | null>(null);
+  const [previewProofTarget, setPreviewProofTarget] = useState<{
+    proofImage: string;
+    relatedDebts: RelatedSettledDebt[];
+  } | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -175,7 +179,19 @@ export default function SubTripDetailScreen() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPreviewProof(d.proofImage!);
+                        setPreviewProofTarget({
+                          proofImage: d.proofImage!,
+                          relatedDebts: [
+                            {
+                              id: d.id,
+                              subTripName: subTrip.name,
+                              debtorName: d.name,
+                              creditorName: subTrip.payerName,
+                              amount: d.amount,
+                              settledByMemberName: d.settledByMemberName,
+                            },
+                          ],
+                        });
                       }}
                       className="mt-1 text-left font-inter text-[10.5px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
                     >
@@ -280,32 +296,13 @@ export default function SubTripDetailScreen() {
       />
 
       {/* Bukti Transfer Modal Preview */}
-      {previewProof && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-5 cursor-pointer"
-          onClick={() => setPreviewProof(null)}
-        >
-          <div className="relative flex flex-col items-center gap-3 rounded-card bg-surface p-4 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between w-full">
-              <span className="font-manrope text-sm font-bold text-text">Bukti Transfer</span>
-              <button
-                type="button"
-                onClick={() => setPreviewProof(null)}
-                className="font-inter text-xs font-bold text-sub hover:text-text"
-              >
-                ✕ Tutup
-              </button>
-            </div>
-            <img src={previewProof} alt="Bukti Transfer" className="w-full max-h-[380px] rounded-lg object-contain bg-black/10" />
-            <a
-              href={previewProof}
-              download="bukti_transfer.png"
-              className="w-full text-center rounded-pill bg-accent py-2 font-inter text-xs font-bold text-onAccent shadow-sm"
-            >
-              ⬇️ Download Bukti
-            </a>
-          </div>
-        </div>
+      {previewProofTarget && (
+        <ProofPreviewModal
+          isOpen={Boolean(previewProofTarget)}
+          onClose={() => setPreviewProofTarget(null)}
+          proofImage={previewProofTarget.proofImage}
+          relatedDebts={previewProofTarget.relatedDebts}
+        />
       )}
     </div>
   );

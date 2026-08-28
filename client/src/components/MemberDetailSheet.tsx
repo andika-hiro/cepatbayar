@@ -4,6 +4,7 @@ import { formatRupiah } from '../lib/format';
 import { getCurrentMemberId } from '../lib/localTrips';
 import SwipeToConfirm from './SwipeToConfirm';
 import SettleDebtModal, { type SettleDebtTarget } from './SettleDebtModal';
+import ProofPreviewModal, { type RelatedSettledDebt } from './ProofPreviewModal';
 
 interface MemberDetailSheetProps {
   isOpen: boolean;
@@ -26,7 +27,10 @@ export default function MemberDetailSheet({
 }: MemberDetailSheetProps) {
   const [settledDebts, setSettledDebts] = useState<SettledDebtItem[]>([]);
   const [loadingSettled, setLoadingSettled] = useState(false);
-  const [previewProof, setPreviewProof] = useState<string | null>(null);
+  const [previewProofTarget, setPreviewProofTarget] = useState<{
+    proofImage: string;
+    relatedDebts: RelatedSettledDebt[];
+  } | null>(null);
   const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | SettleDebtTarget[] | null>(null);
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
@@ -336,32 +340,62 @@ export default function MemberDetailSheet({
                 Belum ada riwayat pelunasan
               </div>
             ) : (
-              mySettledDebts.map((d) => (
-                <div key={d.id} className="flex items-center justify-between rounded-card border border-border bg-bg px-3.5 py-2.5">
-                  <div className="flex flex-col font-inter text-xs">
-                    <span className="font-semibold text-text">{d.subTripName}</span>
-                    <span className="text-sub">{d.debtorName} → {d.creditorName}</span>
-                    {d.settledByMemberName && (
-                      <span className="font-inter text-[10px] text-accent font-medium mt-0.5">
-                        Dilunaskan oleh {d.settledByMemberName}
-                      </span>
-                    )}
-                    {d.proofImage && (
-                      <button
-                        type="button"
-                        onClick={() => setPreviewProof(d.proofImage!)}
-                        className="mt-1 text-left font-inter text-[10.5px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
-                      >
-                        📸 Lihat Bukti Transfer
-                      </button>
-                    )}
+              mySettledDebts.map((d) => {
+                const sameProofDebts = d.proofImage
+                  ? settledDebts.filter((item) => item.proofImage === d.proofImage && item.debtorId === d.debtorId && item.creditorId === d.creditorId)
+                  : [d];
+                const isBatchProof = sameProofDebts.length > 1;
+                const batchTotal = sameProofDebts.reduce((sum, item) => sum + item.amount, 0);
+
+                return (
+                  <div key={d.id} className="flex items-center justify-between rounded-card border border-border bg-bg px-3.5 py-2.5">
+                    <div className="flex flex-col font-inter text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-text">{d.subTripName}</span>
+                        {isBatchProof && (
+                          <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[9.5px] font-bold text-accent">
+                            ⚡ Gabungan ({sameProofDebts.length})
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sub">{d.debtorName} → {d.creditorName}</span>
+                      {isBatchProof && (
+                        <span className="font-inter text-[10px] text-sub mt-0.5">
+                          Total transfer bukti: <strong className="font-mono text-pos">{formatRupiah(batchTotal)}</strong>
+                        </span>
+                      )}
+                      {d.settledByMemberName && (
+                        <span className="font-inter text-[10px] text-accent font-medium mt-0.5">
+                          Dilunaskan oleh {d.settledByMemberName}
+                        </span>
+                      )}
+                      {d.proofImage && (
+                        <button
+                          type="button"
+                          onClick={() => setPreviewProofTarget({
+                            proofImage: d.proofImage!,
+                            relatedDebts: sameProofDebts.map((item) => ({
+                              id: item.id,
+                              subTripName: item.subTripName,
+                              debtorName: item.debtorName,
+                              creditorName: item.creditorName,
+                              amount: item.amount,
+                              settledAt: item.settledAt,
+                            })),
+                          })}
+                          className="mt-1 text-left font-inter text-[10.5px] font-bold text-teal-600 dark:text-teal-400 hover:underline"
+                        >
+                          📸 Lihat Bukti Transfer {isBatchProof ? `(${formatRupiah(batchTotal)})` : ''}
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="font-mono text-xs font-bold text-pos">✓ {formatRupiah(d.amount)}</span>
+                      <span className="font-inter text-[10px] text-sub">{d.settledAt ? d.settledAt.substring(0, 10) : 'Lunas'}</span>
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="font-mono text-xs font-bold text-pos">✓ {formatRupiah(d.amount)}</span>
-                    <span className="font-inter text-[10px] text-sub">{d.settledAt ? d.settledAt.substring(0, 10) : 'Lunas'}</span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -376,32 +410,13 @@ export default function MemberDetailSheet({
       />
 
       {/* Bukti Transfer Modal Preview */}
-      {previewProof && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-5 cursor-pointer"
-          onClick={() => setPreviewProof(null)}
-        >
-          <div className="relative flex flex-col items-center gap-3 rounded-card bg-surface p-4 max-w-sm w-full" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between w-full">
-              <span className="font-manrope text-sm font-bold text-text">Bukti Transfer</span>
-              <button
-                type="button"
-                onClick={() => setPreviewProof(null)}
-                className="font-inter text-xs font-bold text-sub hover:text-text"
-              >
-                ✕ Tutup
-              </button>
-            </div>
-            <img src={previewProof} alt="Bukti Transfer" className="w-full max-h-[380px] rounded-lg object-contain bg-black/10" />
-            <a
-              href={previewProof}
-              download="bukti_transfer.png"
-              className="w-full text-center rounded-pill bg-accent py-2 font-inter text-xs font-bold text-onAccent shadow-sm"
-            >
-              ⬇️ Download Bukti
-            </a>
-          </div>
-        </div>
+      {previewProofTarget && (
+        <ProofPreviewModal
+          isOpen={Boolean(previewProofTarget)}
+          onClose={() => setPreviewProofTarget(null)}
+          proofImage={previewProofTarget.proofImage}
+          relatedDebts={previewProofTarget.relatedDebts}
+        />
       )}
     </div>
   );
