@@ -20,25 +20,25 @@ export default function SwipeToConfirm({
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [confirmed, setConfirmed] = useState(isSettled);
 
   const startXRef = useRef(0);
   const startDragXRef = useRef(0);
 
   useEffect(() => {
-    setConfirmed(isSettled);
-    if (!isSettled) setDragX(0);
+    if (!isSettled) {
+      setDragX(0);
+    }
   }, [isSettled]);
 
   const handleStart = (clientX: number) => {
-    if (confirmed) return;
+    if (isSettled) return;
     setIsDragging(true);
     startXRef.current = clientX;
     startDragXRef.current = dragX;
   };
 
   const handleMove = (clientX: number) => {
-    if (!isDragging || !containerRef.current || confirmed) return;
+    if (!isDragging || !containerRef.current || isSettled) return;
     const rect = containerRef.current.getBoundingClientRect();
     const handleWidth = 38;
     const maxDrag = Math.max(1, rect.width - handleWidth - 8);
@@ -49,15 +49,14 @@ export default function SwipeToConfirm({
   };
 
   const handleEnd = () => {
-    if (!isDragging || !containerRef.current || confirmed) return;
+    if (!isDragging || !containerRef.current || isSettled) return;
     setIsDragging(false);
     const rect = containerRef.current.getBoundingClientRect();
     const handleWidth = 38;
     const maxDrag = Math.max(1, rect.width - handleWidth - 8);
 
     if (dragX > maxDrag * 0.8) {
-      setDragX(maxDrag);
-      setConfirmed(true);
+      setDragX(0);
       onConfirm();
     } else {
       setDragX(0);
@@ -91,7 +90,7 @@ export default function SwipeToConfirm({
     handleEnd();
   };
 
-  if (confirmed) {
+  if (isSettled) {
     return (
       <div className={`flex items-center justify-between rounded-pill bg-pos/15 border border-pos/30 px-4 py-2 font-inter text-xs font-bold text-pos ${className}`}>
         <span>{confirmedLabel}</span>
@@ -99,7 +98,6 @@ export default function SwipeToConfirm({
           <button
             type="button"
             onClick={() => {
-              setConfirmed(false);
               setDragX(0);
               onReset();
             }}
