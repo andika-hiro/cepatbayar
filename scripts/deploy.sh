@@ -89,8 +89,8 @@ HEALTH_STATUS="FAILED"
 ROOT_STATUS="FAILED"
 for attempt in 1 2 3 4 5 6; do
   sleep 5
-  HEALTH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${DOMAIN}/api/health" || echo "FAILED")
-  ROOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://${DOMAIN}/" || echo "FAILED")
+  HEALTH_STATUS=$(ssh -i "$SSH_KEY" -p "$REMOTE_PORT" -o BatchMode=yes -o ConnectTimeout=10 "${REMOTE_USER}@${REMOTE_HOST}" "curl -sk -o /dev/null -w '%{http_code}' 'https://${DOMAIN}/api/health'" || echo "FAILED")
+  ROOT_STATUS=$(ssh -i "$SSH_KEY" -p "$REMOTE_PORT" -o BatchMode=yes -o ConnectTimeout=10 "${REMOTE_USER}@${REMOTE_HOST}" "curl -sk -o /dev/null -w '%{http_code}' 'https://${DOMAIN}/'" || echo "FAILED")
   echo "  attempt ${attempt}: /api/health -> ${HEALTH_STATUS}, / -> ${ROOT_STATUS}"
   if [ "$HEALTH_STATUS" = "200" ] && [ "$ROOT_STATUS" = "200" ]; then
     break
