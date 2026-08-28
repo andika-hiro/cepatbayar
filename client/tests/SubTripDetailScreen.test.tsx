@@ -96,8 +96,14 @@ describe('SubTripDetailScreen — toggling debts', () => {
     fireEvent.mouseDown(knob, { clientX: 0 });
     fireEvent.mouseMove(knob, { clientX: 300 });
     fireEvent.mouseUp(knob);
-    expect(api.toggleDebtSettled).toHaveBeenCalledWith('a1', 5, 10, true, 2);
-    await waitFor(() => expect(api.getSubTrip).toHaveBeenCalledTimes(2));
+
+    const confirmModalBtn = await screen.findByText('✓ Tandai Lunas');
+    fireEvent.click(confirmModalBtn);
+
+    await waitFor(() => {
+      expect(api.toggleDebtSettled).toHaveBeenCalledWith('a1', 5, 10, true, 2, null);
+      expect(api.getSubTrip).toHaveBeenCalledTimes(2);
+    });
   });
 });
 

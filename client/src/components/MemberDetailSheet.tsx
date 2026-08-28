@@ -3,6 +3,7 @@ import { api, type SaldoData, type SettledDebtItem } from '../lib/api';
 import { formatRupiah } from '../lib/format';
 import { getCurrentMemberId } from '../lib/localTrips';
 import SwipeToConfirm from './SwipeToConfirm';
+import SettleDebtModal, { type SettleDebtTarget } from './SettleDebtModal';
 
 interface MemberDetailSheetProps {
   isOpen: boolean;
@@ -26,16 +27,28 @@ export default function MemberDetailSheet({
   const [settledDebts, setSettledDebts] = useState<SettledDebtItem[]>([]);
   const [loadingSettled, setLoadingSettled] = useState(false);
   const [previewProof, setPreviewProof] = useState<string | null>(null);
+  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | null>(null);
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
-  async function handleToggleSettled(subTripId: number, debtId: number, currentSettled: boolean, proofImage?: string | null) {
-    if (!publicId) return;
+  async function handleConfirmSettlement(proofImage?: string | null) {
+    if (!publicId || !settleTargetDebt) return;
     try {
-      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled, currentMemberId, proofImage);
+      await api.toggleDebtSettled(publicId, settleTargetDebt.subTripId, settleTargetDebt.debtId, true, currentMemberId, proofImage);
+      setSettleTargetDebt(null);
       if (onRefresh) onRefresh();
     } catch {
       alert('Gagal memperbarui status pelunasan');
+    }
+  }
+
+  async function handleResetSettled(subTripId: number, debtId: number) {
+    if (!publicId) return;
+    try {
+      await api.toggleDebtSettled(publicId, subTripId, debtId, false, currentMemberId);
+      if (onRefresh) onRefresh();
+    } catch {
+      alert('Gagal membatalkan status pelunasan');
     }
   }
 
@@ -145,8 +158,17 @@ export default function MemberDetailSheet({
                     label="Geser jika sudah bayar 👉"
                     confirmedLabel="✓ Lunas"
                     isSettled={false}
-                    onConfirm={() => handleToggleSettled(d.subTripId, d.id, false)}
-                    onReset={() => handleToggleSettled(d.subTripId, d.id, true)}
+                    onConfirm={() => {
+                      setSettleTargetDebt({
+                        subTripId: d.subTripId,
+                        debtId: d.id,
+                        subTripName: d.subTripName,
+                        debtorName: d.debtorName,
+                        creditorName: d.creditorName,
+                        amount: d.amount,
+                      });
+                    }}
+                    onReset={() => handleResetSettled(d.subTripId, d.id)}
                   />
                 </div>
               ))
@@ -198,8 +220,17 @@ export default function MemberDetailSheet({
                     label="Geser tandai lunas 👉"
                     confirmedLabel="✓ Lunas"
                     isSettled={false}
-                    onConfirm={() => handleToggleSettled(d.subTripId, d.id, false)}
-                    onReset={() => handleToggleSettled(d.subTripId, d.id, true)}
+                    onConfirm={() => {
+                      setSettleTargetDebt({
+                        subTripId: d.subTripId,
+                        debtId: d.id,
+                        subTripName: d.subTripName,
+                        debtorName: d.debtorName,
+                        creditorName: d.creditorName,
+                        amount: d.amount,
+                      });
+                    }}
+                    onReset={() => handleResetSettled(d.subTripId, d.id)}
                   />
                 </div>
               ))
@@ -265,6 +296,14 @@ export default function MemberDetailSheet({
           </div>
         </div>
       </div>
+
+      {/* Settle Debt Confirmation Modal with Optional Proof */}
+      <SettleDebtModal
+        isOpen={Boolean(settleTargetDebt)}
+        debt={settleTargetDebt}
+        onClose={() => setSettleTargetDebt(null)}
+        onConfirm={handleConfirmSettlement}
+      />
 
       {/* Bukti Transfer Modal Preview */}
       {previewProof && (

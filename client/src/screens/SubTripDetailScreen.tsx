@@ -8,6 +8,7 @@ import BottomNavTripLevel from '../components/BottomNavTripLevel';
 import AddEditSubTripSheet from '../components/AddEditSubTripSheet';
 import SwipeToConfirm from '../components/SwipeToConfirm';
 import MemberDetailSheet from '../components/MemberDetailSheet';
+import SettleDebtModal, { type SettleDebtTarget } from '../components/SettleDebtModal';
 
 export default function SubTripDetailScreen() {
   const { publicId, subTripId } = useParams<{ publicId: string; subTripId: string }>();
@@ -17,6 +18,7 @@ export default function SubTripDetailScreen() {
   const [saldoData, setSaldoData] = useState<SaldoData | null>(null);
   const [sheetMode, setSheetMode] = useState<'create' | 'edit' | null>(null);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
+  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | null>(null);
   const [previewProof, setPreviewProof] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,10 +46,25 @@ export default function SubTripDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicId, subTripId]);
 
-  async function handleToggleSettled(debtId: number, settled: boolean) {
+  async function handleConfirmSettlement(proofImage?: string | null) {
+    if (!publicId || !subTripId || !settleTargetDebt) return;
+    try {
+      await api.toggleDebtSettled(publicId, Number(subTripId), settleTargetDebt.debtId, true, currentMemberId, proofImage);
+      setSettleTargetDebt(null);
+      load();
+    } catch {
+      alert('Gagal memperbarui status pelunasan');
+    }
+  }
+
+  async function handleResetSettled(debtId: number) {
     if (!publicId || !subTripId) return;
-    await api.toggleDebtSettled(publicId, Number(subTripId), debtId, settled, currentMemberId);
-    load();
+    try {
+      await api.toggleDebtSettled(publicId, Number(subTripId), debtId, false, currentMemberId);
+      load();
+    } catch {
+      alert('Gagal membatalkan status pelunasan');
+    }
   }
 
   function handleSaved() {
@@ -174,8 +191,17 @@ export default function SubTripDetailScreen() {
               label="Geser tandai lunas 👉"
               confirmedLabel={d.settledByMemberName ? `✓ Lunas (oleh ${d.settledByMemberName})` : '✓ Lunas'}
               isSettled={Boolean(d.settled)}
-              onConfirm={() => handleToggleSettled(d.id, true)}
-              onReset={() => handleToggleSettled(d.id, false)}
+              onConfirm={() => {
+                setSettleTargetDebt({
+                  subTripId: Number(subTripId),
+                  debtId: d.id,
+                  subTripName: subTrip.name,
+                  debtorName: d.name,
+                  creditorName: subTrip.payerName,
+                  amount: d.amount,
+                });
+              }}
+              onReset={() => handleResetSettled(d.id)}
             />
           </div>
         ))}
@@ -243,6 +269,14 @@ export default function SubTripDetailScreen() {
         memberName={selectedMemberDetail?.name ?? ''}
         saldoData={saldoData}
         onRefresh={load}
+      />
+
+      {/* Settle Debt Confirmation Modal with Optional Proof */}
+      <SettleDebtModal
+        isOpen={Boolean(settleTargetDebt)}
+        debt={settleTargetDebt}
+        onClose={() => setSettleTargetDebt(null)}
+        onConfirm={handleConfirmSettlement}
       />
 
       {/* Bukti Transfer Modal Preview */}

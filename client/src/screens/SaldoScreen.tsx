@@ -9,6 +9,7 @@ import ShareTripSheet from '../components/ShareTripSheet';
 import MemberDetailSheet from '../components/MemberDetailSheet';
 import AppLogo from '../components/AppLogo';
 import SwipeToConfirm from '../components/SwipeToConfirm';
+import SettleDebtModal, { type SettleDebtTarget } from '../components/SettleDebtModal';
 
 
 export default function SaldoScreen() {
@@ -20,6 +21,7 @@ export default function SaldoScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
+  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | null>(null);
   const [previewQris, setPreviewQris] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,13 +47,24 @@ export default function SaldoScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicId]);
 
-  async function handleToggleSettled(subTripId: number, debtId: number, currentSettled: boolean) {
-    if (!publicId) return;
+  async function handleConfirmSettlement(proofImage?: string | null) {
+    if (!publicId || !settleTargetDebt) return;
     try {
-      await api.toggleDebtSettled(publicId, subTripId, debtId, !currentSettled, currentMemberId);
+      await api.toggleDebtSettled(publicId, settleTargetDebt.subTripId, settleTargetDebt.debtId, true, currentMemberId, proofImage);
+      setSettleTargetDebt(null);
       load();
     } catch {
       alert('Gagal memperbarui status pelunasan');
+    }
+  }
+
+  async function handleResetSettled(subTripId: number, debtId: number) {
+    if (!publicId) return;
+    try {
+      await api.toggleDebtSettled(publicId, subTripId, debtId, false, currentMemberId);
+      load();
+    } catch {
+      alert('Gagal membatalkan status pelunasan');
     }
   }
 
@@ -276,8 +289,17 @@ export default function SaldoScreen() {
                   label={isMeCreditor ? 'Geser untuk tandai lunas 👉' : isMeDebtor ? 'Geser jika sudah transfer 👉' : 'Geser untuk tandai lunas 👉'}
                   confirmedLabel="✓ Lunas"
                   isSettled={Boolean((debt as any).settled)}
-                  onConfirm={() => handleToggleSettled(debt.subTripId, debt.id, false)}
-                  onReset={() => handleToggleSettled(debt.subTripId, debt.id, true)}
+                  onConfirm={() => {
+                    setSettleTargetDebt({
+                      subTripId: debt.subTripId,
+                      debtId: debt.id,
+                      subTripName: debt.subTripName,
+                      debtorName: debt.debtorName,
+                      creditorName: debt.creditorName,
+                      amount: debt.amount,
+                    });
+                  }}
+                  onReset={() => handleResetSettled(debt.subTripId, debt.id)}
                   className="mt-1"
                 />
               </div>
@@ -433,6 +455,14 @@ export default function SaldoScreen() {
         memberName={selectedMemberDetail?.name ?? ''}
         saldoData={saldoData}
         onRefresh={load}
+      />
+
+      {/* Settle Debt Confirmation Modal with Optional Proof */}
+      <SettleDebtModal
+        isOpen={Boolean(settleTargetDebt)}
+        debt={settleTargetDebt}
+        onClose={() => setSettleTargetDebt(null)}
+        onConfirm={handleConfirmSettlement}
       />
 
       {/* QRIS Full Preview Modal */}
