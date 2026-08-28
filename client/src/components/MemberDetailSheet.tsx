@@ -27,14 +27,30 @@ export default function MemberDetailSheet({
   const [settledDebts, setSettledDebts] = useState<SettledDebtItem[]>([]);
   const [loadingSettled, setLoadingSettled] = useState(false);
   const [previewProof, setPreviewProof] = useState<string | null>(null);
-  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | null>(null);
+  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | SettleDebtTarget[] | null>(null);
 
   const currentMemberId = publicId ? getCurrentMemberId(publicId) : null;
 
-  async function handleConfirmSettlement(proofImage?: string | null) {
-    if (!publicId || !settleTargetDebt) return;
+  async function handleConfirmSettlement(selectedDebts: SettleDebtTarget[], proofImage?: string | null) {
+    if (!publicId || selectedDebts.length === 0) return;
     try {
-      await api.toggleDebtSettled(publicId, settleTargetDebt.subTripId, settleTargetDebt.debtId, true, currentMemberId, proofImage);
+      if (selectedDebts.length === 1) {
+        await api.toggleDebtSettled(
+          publicId,
+          selectedDebts[0].subTripId,
+          selectedDebts[0].debtId,
+          true,
+          currentMemberId,
+          proofImage
+        );
+      } else {
+        await api.batchSettleDebts(publicId, {
+          debtIds: selectedDebts.map((d) => d.debtId),
+          settled: true,
+          settledByMemberId: currentMemberId,
+          proofImage,
+        });
+      }
       setSettleTargetDebt(null);
       if (onRefresh) onRefresh();
     } catch {
@@ -127,8 +143,30 @@ export default function MemberDetailSheet({
 
           {/* Section: Debts to Pay (Kewajiban Membayar) */}
           <div className="flex flex-col gap-2">
-            <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
-              Kewajiban Membayar ({myDebtsToPay.length})
+            <div className="flex items-center justify-between">
+              <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+                Kewajiban Membayar ({myDebtsToPay.length})
+              </div>
+              {myDebtsToPay.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettleTargetDebt(
+                      myDebtsToPay.map((d) => ({
+                        subTripId: d.subTripId,
+                        debtId: d.id,
+                        subTripName: d.subTripName,
+                        debtorName: d.debtorName,
+                        creditorName: d.creditorName,
+                        amount: d.amount,
+                      }))
+                    );
+                  }}
+                  className="rounded-pill bg-accent px-2.5 py-1 font-inter text-[10.5px] font-bold text-onAccent shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                >
+                  ⚡ Lunasi Sekaligus ({formatRupiah(myDebtsToPay.reduce((s, d) => s + d.amount, 0))})
+                </button>
+              )}
             </div>
             {myDebtsToPay.length === 0 ? (
               <div className="rounded-input border border-border bg-bg px-3.5 py-3 text-center font-inter text-xs text-sub">
@@ -177,8 +215,30 @@ export default function MemberDetailSheet({
 
           {/* Section: Debts to Receive (Hak Menerima / Nalingin) */}
           <div className="flex flex-col gap-2">
-            <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
-              Hak Menerima / Nalingin ({myDebtsToReceive.length})
+            <div className="flex items-center justify-between">
+              <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
+                Hak Menerima / Nalingin ({myDebtsToReceive.length})
+              </div>
+              {myDebtsToReceive.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSettleTargetDebt(
+                      myDebtsToReceive.map((d) => ({
+                        subTripId: d.subTripId,
+                        debtId: d.id,
+                        subTripName: d.subTripName,
+                        debtorName: d.debtorName,
+                        creditorName: d.creditorName,
+                        amount: d.amount,
+                      }))
+                    );
+                  }}
+                  className="rounded-pill bg-pos px-2.5 py-1 font-inter text-[10.5px] font-bold text-white shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                >
+                  ⚡ Tandai Lunas Sekaligus ({formatRupiah(myDebtsToReceive.reduce((s, d) => s + d.amount, 0))})
+                </button>
+              )}
             </div>
             {myDebtsToReceive.length === 0 ? (
               <div className="rounded-input border border-border bg-bg px-3.5 py-3 text-center font-inter text-xs text-sub">

@@ -97,7 +97,7 @@ describe('SubTripDetailScreen — toggling debts', () => {
     fireEvent.mouseMove(knob, { clientX: 300 });
     fireEvent.mouseUp(knob);
 
-    const confirmModalBtn = await screen.findByText('✓ Tandai Lunas');
+    const confirmModalBtn = await screen.findByText(/✓ Tandai Lunas/);
     fireEvent.click(confirmModalBtn);
 
     await waitFor(() => {

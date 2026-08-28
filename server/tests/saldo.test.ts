@@ -139,5 +139,38 @@ describe('Saldo & Deposits API', () => {
     expect(res.body[0].debtorName).toBe('Budi');
     expect(res.body[0].creditorName).toBe('Adit');
   });
+
+  it('POST /api/trips/:publicId/debts/batch-settle settles multiple debts at once', async () => {
+    const [d1] = await db.insert(debts).values({
+      subTripId,
+      memberId: memberBudiId,
+      amount: 10000,
+      settled: false,
+    });
+    const [d2] = await db.insert(debts).values({
+      subTripId,
+      memberId: memberBudiId,
+      amount: 20000,
+      settled: false,
+    });
+
+    const res = await request(app)
+      .post(`/api/trips/${tripPublicId}/debts/batch-settle`)
+      .send({
+        debtIds: [d1.insertId, d2.insertId],
+        settled: true,
+        settledByMemberId: memberBudiId,
+        proofImage: 'data:image/png;base64,sampleproof',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.count).toBe(2);
+
+    const updatedDebts = await db.select().from(debts).where(eq(debts.subTripId, subTripId));
+    const settledDebts = updatedDebts.filter(d => [d1.insertId, d2.insertId].includes(d.id));
+    expect(settledDebts.every(d => d.settled)).toBe(true);
+    expect(settledDebts.every(d => d.proofImage === 'data:image/png;base64,sampleproof')).toBe(true);
+  });
 });
 

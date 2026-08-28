@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api, type DepositHistoryItem, type SaldoData, type TripDetail } from '../lib/api';
 import { getCurrentMemberId } from '../lib/localTrips';
@@ -21,7 +21,8 @@ export default function SaldoScreen() {
   const [shareOpen, setShareOpen] = useState(false);
   const [selectedMemberDetail, setSelectedMemberDetail] = useState<{ id: number; name: string } | null>(null);
   const [selectedAccounts, setSelectedAccounts] = useState<Record<number, number>>({});
-  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | null>(null);
+  const [settleTargetDebt, setSettleTargetDebt] = useState<SettleDebtTarget | SettleDebtTarget[] | null>(null);
+  const [debtFilterTab, setDebtFilterTab] = useState<'all' | 'mine'>('all');
   const [previewQris, setPreviewQris] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,10 +48,26 @@ export default function SaldoScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicId]);
 
-  async function handleConfirmSettlement(proofImage?: string | null) {
-    if (!publicId || !settleTargetDebt) return;
+  async function handleConfirmSettlement(selectedDebts: SettleDebtTarget[], proofImage?: string | null) {
+    if (!publicId || selectedDebts.length === 0) return;
     try {
-      await api.toggleDebtSettled(publicId, settleTargetDebt.subTripId, settleTargetDebt.debtId, true, currentMemberId, proofImage);
+      if (selectedDebts.length === 1) {
+        await api.toggleDebtSettled(
+          publicId,
+          selectedDebts[0].subTripId,
+          selectedDebts[0].debtId,
+          true,
+          currentMemberId,
+          proofImage
+        );
+      } else {
+        await api.batchSettleDebts(publicId, {
+          debtIds: selectedDebts.map((d) => d.debtId),
+          settled: true,
+          settledByMemberId: currentMemberId,
+          proofImage,
+        });
+      }
       setSettleTargetDebt(null);
       load();
     } catch {
@@ -87,35 +104,73 @@ export default function SaldoScreen() {
     );
   }
 
+  const allUnsettledDebts = saldoData?.unsettledDebts ?? [];
+  const myUnsettledDebts = useMemo(() => {
+    if (!saldoData || currentMemberId === null) return [];
+    return saldoData.unsettledDebts.filter(
+      (d) => d.debtorId === currentMemberId || d.creditorId === currentMemberId
+    );
+  }, [saldoData, currentMemberId]);
+
+  const displayedDebts = debtFilterTab === 'mine' ? myUnsettledDebts : allUnsettledDebts;
+
+  const groupedDebts = useMemo(() => {
+    if (!saldoData) return [];
+    const map = new Map<
+      string,
+      {
+        debtorId: number;
+        debtorName: string;
+        creditorId: number;
+        creditorName: string;
+        debts: typeof saldoData.unsettledDebts;
+      }
+    >();
+
+    for (const d of displayedDebts) {
+      const key = `${d.debtorId}-${d.creditorId}`;
+      const existing = map.get(key);
+      if (existing) {
+        existing.debts.push(d);
+      } else {
+        map.set(key, {
+          debtorId: d.debtorId,
+          debtorName: d.debtorName,
+          creditorId: d.creditorId,
+          creditorName: d.creditorName,
+          debts: [d],
+        });
+      }
+    }
+    return Array.from(map.values()).filter((g) => g.debts.length > 1);
+  }, [saldoData, displayedDebts]);
+
   if (!trip || !saldoData || !publicId || currentMemberId === null) return null;
 
   return (
     <div className="flex min-h-screen flex-col gap-5 px-5 pb-[100px] pt-3">
-      {/* Header */}
+      {/* Top bar with Trip Title */}
       <div className="flex items-center justify-between">
-        <button
-          onClick={() => navigate(`/t/${publicId}/ringkasan`)}
-          className="font-inter text-xs font-semibold text-accent"
-        >
-          ← Ringkasan
-        </button>
-        <div className="flex items-center gap-1.5 font-manrope text-[17px] font-extrabold text-text">
+        <div className="flex items-center gap-2">
           <AppLogo size={22} />
-          <span>Saldo & deposit</span>
+          <span className="font-manrope text-base font-extrabold text-text tracking-tight truncate max-w-[200px]">
+            {trip.name}
+          </span>
         </div>
         <button
           onClick={() => setShareOpen(true)}
-          className="flex items-center gap-1 rounded-pill bg-accent px-3 py-1 font-inter text-xs font-bold text-onAccent shadow-sm hover:opacity-90"
+          className="flex items-center gap-1.5 rounded-pill border border-border bg-surface px-3 py-1.5 font-inter text-xs font-semibold text-text shadow-sm hover:bg-surfaceAlt active:scale-95 transition-all"
         >
-          <span>🔗 Bagikan</span>
+          <span>🔗</span>
+          <span>Share</span>
         </button>
       </div>
 
-      {/* Section 1: Saldo Semua Anggota (Rollup) */}
-      <div className="flex flex-col gap-2">
+      {/* Section 1: Ringkasan Saldo per Orang */}
+      <div className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
           <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
-            Saldo semua anggota (rollup informasional)
+            Ringkasan saldo per orang
           </div>
           <div className="font-inter text-[10.5px] font-medium text-sub">Klik nama untuk rincian 💡</div>
         </div>
@@ -153,23 +208,108 @@ export default function SaldoScreen() {
         Preview & kirim rekap ke grup WA →
       </button>
 
-      {/* Section 2: Semua tagihan per sub trip */}
-      <div className="flex flex-col gap-2.5">
-        <div className="flex flex-col gap-0.5">
+      {/* Section 2: Daftar Tagihan Belum Lunas */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
           <div className="font-inter text-[11px] font-semibold uppercase tracking-[.04em] text-sub">
-            Semua tagihan (per sub trip)
+            Daftar Tagihan Belum Lunas
           </div>
           <div className="font-inter text-xs text-sub">
-            Tagihan gak dijumlah antar sub trip — tiap baris ditandai lunas sendiri-sendiri.
+            {displayedDebts.length} tagihan
           </div>
         </div>
 
-        {saldoData.unsettledDebts.length === 0 ? (
+        {/* Filter Switch Tab: Semua Tagihan vs Tagihan Saya */}
+        <div className="flex rounded-pill bg-surfaceAlt p-1 border border-border">
+          <button
+            type="button"
+            onClick={() => setDebtFilterTab('all')}
+            className={`flex-1 rounded-pill py-1.5 font-inter text-xs font-bold transition-all ${
+              debtFilterTab === 'all'
+                ? 'bg-accent text-onAccent shadow-sm'
+                : 'text-sub hover:text-text'
+            }`}
+          >
+            Semua Tagihan ({allUnsettledDebts.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setDebtFilterTab('mine')}
+            className={`flex-1 rounded-pill py-1.5 font-inter text-xs font-bold transition-all ${
+              debtFilterTab === 'mine'
+                ? 'bg-accent text-onAccent shadow-sm'
+                : 'text-sub hover:text-text'
+            }`}
+          >
+            Tagihan Saya ({myUnsettledDebts.length})
+          </button>
+        </div>
+
+        {/* Batch Settlement / Pelunasan Gabungan Banner */}
+        {groupedDebts.length > 0 && (
+          <div className="flex flex-col gap-2 rounded-card border border-teal-500/30 bg-teal-500/10 p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="font-inter text-xs font-bold text-text flex items-center gap-1">
+                <span>⚡</span>
+                <span>Pelunasan Gabungan (1 Bukti Transfer)</span>
+              </span>
+              <span className="font-inter text-[10px] text-teal-600 dark:text-teal-400 font-semibold">
+                {groupedDebts.length} grup tagihan
+              </span>
+            </div>
+            <div className="font-inter text-[11px] text-sub leading-snug">
+              Ada beberapa tagihan ke orang yang sama. Bayar sekaligus dengan 1 bukti transfer:
+            </div>
+            <div className="flex flex-col gap-2 pt-0.5">
+              {groupedDebts.map((g) => {
+                const total = g.debts.reduce((sum, d) => sum + d.amount, 0);
+                const isMine = g.debtorId === currentMemberId;
+                return (
+                  <div
+                    key={`${g.debtorId}-${g.creditorId}`}
+                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-2.5 shadow-sm"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-inter text-xs font-semibold text-text">
+                        {g.debtorName} → {g.creditorName} {isMine && <span className="text-[10px] text-accent font-bold">(Saya)</span>}
+                      </span>
+                      <span className="font-inter text-[11px] text-sub">
+                        {g.debts.length} tagihan · <strong className="font-mono text-pos">{formatRupiah(total)}</strong>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettleTargetDebt(
+                          g.debts.map((d) => ({
+                            subTripId: d.subTripId,
+                            debtId: d.id,
+                            subTripName: d.subTripName,
+                            debtorName: d.debtorName,
+                            creditorName: d.creditorName,
+                            amount: d.amount,
+                          }))
+                        );
+                      }}
+                      className="rounded-pill bg-pos px-3 py-1.5 font-inter text-xs font-bold text-white shadow-sm hover:opacity-90 active:scale-95 transition-all"
+                    >
+                      ⚡ Bayar Sekaligus
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {displayedDebts.length === 0 ? (
           <div className="rounded-card border border-border bg-surface px-4 py-6 text-center font-inter text-xs text-sub">
-            Semua tagihan sub trip sudah lunas 🎉
+            {debtFilterTab === 'mine'
+              ? 'Tidak ada tagihan yang berkaitan dengan kamu 🎉'
+              : 'Semua tagihan sub trip sudah lunas 🎉'}
           </div>
         ) : (
-          saldoData.unsettledDebts.map((debt) => {
+          displayedDebts.map((debt) => {
             const isMeDebtor = debt.debtorId === currentMemberId;
             const isMeCreditor = debt.creditorId === currentMemberId;
             const activeAccId = selectedAccounts[debt.id];

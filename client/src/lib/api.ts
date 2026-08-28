@@ -321,6 +321,12 @@ export const api = {
       body: JSON.stringify({ settled, settledByMemberId, proofImage }),
       headers: settledByMemberId ? { 'X-Member-Id': String(settledByMemberId) } : undefined,
     }),
+  batchSettleDebts: (publicId: string, input: { debtIds: number[]; settled?: boolean; settledByMemberId?: number | null; proofImage?: string | null }) =>
+    request<{ ok: true; count: number }>(`/trips/${publicId}/debts/batch-settle`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+      headers: input.settledByMemberId ? { 'X-Member-Id': String(input.settledByMemberId) } : undefined,
+    }),
   createTrip: (input: { name: string; destination: string; startDate: string; endDate: string; members: string[] }) =>
     request<{ publicId: string }>('/trips', { method: 'POST', body: JSON.stringify(input) }),
   getSaldoData: (publicId: string) => request<SaldoData>(`/trips/${publicId}/saldo`),

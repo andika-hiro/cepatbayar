@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/client';
 import { trips, tripMembers, subTrips, debts, deposits, memberAccounts } from '../db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray } from 'drizzle-orm';
 import { computeDynamicDeposits } from '../lib/depositLogic';
 
 const router = Router();
@@ -176,6 +176,50 @@ router.get('/:publicId/settled-debts', async (req, res) => {
       proofImage: s.proofImage || null,
     }))
   );
+});
+
+// POST /api/trips/:publicId/debts/batch-settle
+router.post('/:publicId/debts/batch-settle', async (req, res) => {
+  const { publicId } = req.params;
+  const tripList = await db.select().from(trips).where(eq(trips.publicId, publicId));
+  if (!tripList.length) return res.status(404).json({ error: 'Trip not found' });
+  const trip = tripList[0];
+
+  const { debtIds, settled = true, proofImage, settledByMemberId } = req.body;
+  if (!Array.isArray(debtIds) || debtIds.length === 0) {
+    return res.status(400).json({ error: 'debtIds must be a non-empty array' });
+  }
+
+  const claimedMemberIdHeader = req.header('X-Member-Id');
+  const finalSettledByMemberId = settled
+    ? (settledByMemberId ?? (claimedMemberIdHeader ? Number(claimedMemberIdHeader) : null))
+    : null;
+
+  // Find all debts belonging to this trip
+  const tripDebts = await db
+    .select({ id: debts.id })
+    .from(debts)
+    .innerJoin(subTrips, eq(debts.subTripId, subTrips.id))
+    .where(and(eq(subTrips.tripId, trip.id), inArray(debts.id, debtIds)));
+
+  const validIds = tripDebts.map(d => d.id);
+  if (validIds.length === 0) {
+    return res.status(404).json({ error: 'No matching debts found' });
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(debts)
+      .set({
+        settled: Boolean(settled),
+        settledAt: settled ? new Date() : null,
+        settledByMemberId: finalSettledByMemberId,
+        proofImage: settled ? (proofImage || null) : null,
+      })
+      .where(inArray(debts.id, validIds));
+  });
+
+  res.json({ ok: true, count: validIds.length });
 });
 
 // POST /api/trips/:publicId/deposits

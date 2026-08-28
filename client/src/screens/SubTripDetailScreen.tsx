@@ -46,10 +46,10 @@ export default function SubTripDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicId, subTripId]);
 
-  async function handleConfirmSettlement(proofImage?: string | null) {
-    if (!publicId || !subTripId || !settleTargetDebt) return;
+  async function handleConfirmSettlement(selectedDebts: SettleDebtTarget[], proofImage?: string | null) {
+    if (!publicId || !subTripId || selectedDebts.length === 0) return;
     try {
-      await api.toggleDebtSettled(publicId, Number(subTripId), settleTargetDebt.debtId, true, currentMemberId, proofImage);
+      await api.toggleDebtSettled(publicId, Number(subTripId), selectedDebts[0].debtId, true, currentMemberId, proofImage);
       setSettleTargetDebt(null);
       load();
     } catch {
