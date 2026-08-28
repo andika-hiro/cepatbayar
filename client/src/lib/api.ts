@@ -184,13 +184,17 @@ export interface RawDepositItem {
   toMemberId: number;
   toName: string;
   amount: number;
+  proofNote?: string;
 }
+
+export type DepositHistoryItem = RawDepositItem;
 
 export interface SaldoData {
   rollupMembers: RollupMember[];
   unsettledDebts: UnsettledDebtItem[];
   deposits: DepositSummaryItem[];
   rawDeposits?: RawDepositItem[];
+  depositHistory?: RawDepositItem[];
 }
 
 

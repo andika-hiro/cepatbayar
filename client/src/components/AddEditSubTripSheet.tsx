@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { api, type SplitMode, type SubTripCategory, type SubTripDetail, type SubTripInput } from '../lib/api';
 import { CATEGORIES } from '../lib/categories';
-import { formatNumberWithCommas } from '../lib/format';
+import { formatNumberWithCommas, formatThousands } from '../lib/format';
 import ItemRow, { type ItemRowParticipant } from './ItemRow';
 
 import OcrScanSheet from './OcrScanSheet';

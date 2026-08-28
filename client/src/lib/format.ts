@@ -22,6 +22,8 @@ export function formatNumberWithCommas(amount: number | string): string {
   return num.toLocaleString('en-US');
 }
 
+export const formatThousands = formatNumberWithCommas;
+
 export function parseFormattedNumber(text: string): string {
   return text.replace(/[^0-9]/g, '');
 }

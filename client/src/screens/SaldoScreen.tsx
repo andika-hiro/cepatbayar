@@ -295,7 +295,7 @@ export default function SaldoScreen() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleDeleteDeposit(item)}
+                        onClick={() => handleDeleteDeposit(item.id, item.fromName, item.amount)}
                         className="rounded-input border border-neg/30 bg-neg/10 px-2.5 py-1 font-inter text-[11px] font-bold text-neg hover:bg-neg/20"
                         title="Hapus deposit"
                       >

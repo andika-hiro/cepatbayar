@@ -31,7 +31,7 @@ describe('formatThousands', () => {
 
   it('handles empty and zero values gracefully', () => {
     expect(formatThousands('')).toBe('');
-    expect(formatThousands(undefined)).toBe('');
+    expect(formatThousands(undefined as any)).toBe('');
     expect(formatThousands(0)).toBe('0');
   });
 });
