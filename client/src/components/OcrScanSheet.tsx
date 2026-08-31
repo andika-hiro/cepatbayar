@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { api, type OcrScanResult } from '../lib/api';
-import { formatRupiah, formatThousands } from '../lib/format';
+import { formatNumberWithCommas, formatRupiah } from '../lib/format';
 
-
-interface OcrDraftItem {
+export interface OcrDraftItem {
   name: string;
   qty?: number;
   unitPrice?: number;
   price: number;
+}
+
+interface OcrRowItem {
+  name: string;
+  qtyText: string;
+  unitPriceText: string;
+  priceText: string;
 }
 
 interface OcrScanSheetProps {
@@ -33,16 +39,10 @@ function compressAndResizeImage(file: File): Promise<string> {
           resolve(res);
         }
       };
-      // Generous timeout — this only exists as a safety net in case image
-      // decode never fires; it should essentially never trigger in practice.
       const timer = setTimeout(() => finish(dataUrl), 10);
       img.onload = () => {
         clearTimeout(timer);
         try {
-          // Receipt text (especially thermal-printer fonts) needs real
-          // resolution to stay legible for OCR — 1200px made photos blurry
-          // enough that the model frequently couldn't read them at all.
-          // 10MB server limit gives plenty of headroom for 2000px JPEGs.
           const MAX_DIM = 2000;
           let width = img.width || 800;
           let height = img.height || 600;
@@ -79,12 +79,11 @@ function compressAndResizeImage(file: File): Promise<string> {
   });
 }
 
-
 export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetProps) {
   const [step, setStep] = useState<'capture' | 'loading' | 'draft'>('capture');
-  const [items, setItems] = useState<OcrDraftItem[]>([]);
-  const [taxPercent, setTaxPercent] = useState(10);
-  const [servicePercent, setServicePercent] = useState(5);
+  const [items, setItems] = useState<OcrRowItem[]>([]);
+  const [taxPercentText, setTaxPercentText] = useState('10');
+  const [servicePercentText, setServicePercentText] = useState('5');
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -95,22 +94,33 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
       setError(null);
       const res: OcrScanResult = await api.scanReceipt(imageData);
       const validItems = res.items && res.items.length > 0 ? res.items : [{ name: '', price: 0 }];
-      setItems(validItems);
-      setTaxPercent(res.taxPercent || 0);
-      setServicePercent(res.servicePercent || 0);
+      setItems(
+        validItems.map((item) => {
+          const q = item.qty || 1;
+          const p = item.price > 0 ? item.price : 0;
+          const up = item.unitPrice && item.unitPrice > 0 ? item.unitPrice : p > 0 && q > 1 ? Math.round(p / q) : 0;
+          return {
+            name: item.name || '',
+            qtyText: String(q),
+            unitPriceText: up > 0 ? String(up) : '',
+            priceText: p > 0 ? String(p) : '',
+          };
+        })
+      );
+      setTaxPercentText(res.taxPercent !== undefined && res.taxPercent > 0 ? String(res.taxPercent) : '');
+      setServicePercentText(res.servicePercent !== undefined && res.servicePercent > 0 ? String(res.servicePercent) : '');
       if (res.isFallback) {
         setError('⚠️ AI kesulitan membaca otomatis struk ini. Silakan periksa atau isi rincian item secara manual.');
       }
       setStep('draft');
     } catch {
-      setItems([{ name: '', price: 0 }]);
-      setTaxPercent(0);
-      setServicePercent(0);
+      setItems([{ name: '', qtyText: '1', unitPriceText: '', priceText: '' }]);
+      setTaxPercentText('');
+      setServicePercentText('');
       setError('⚠️ Gagal memproses AI. Silakan masukkan rincian item struk secara manual di bawah.');
       setStep('draft');
     }
   }
-
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -126,45 +136,72 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
     }
   }
 
-  function handleItemChange(index: number, field: 'name' | 'qty' | 'unitPrice' | 'price', value: string) {
+  function handleItemChange(index: number, field: 'name' | 'qty' | 'unitPrice' | 'price', rawValue: string) {
     const next = [...items];
     const curr = { ...next[index] };
+
     if (field === 'name') {
-      curr.name = value;
+      curr.name = rawValue;
     } else if (field === 'qty') {
-      const q = parseInt(value, 10) || 1;
-      curr.qty = q;
-      const up = curr.unitPrice || (curr.price > 0 ? Math.round(curr.price / q) : 0);
-      curr.unitPrice = up;
-      curr.price = q * up;
+      const clean = rawValue.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+      curr.qtyText = clean;
+      const q = parseInt(clean, 10) || 1;
+      const up = parseInt(curr.unitPriceText.replace(/\D/g, ''), 10) || 0;
+      if (up > 0) {
+        curr.priceText = String(q * up);
+      }
     } else if (field === 'unitPrice') {
-      const up = parseInt(value, 10) || 0;
-      const q = curr.qty || 1;
-      curr.unitPrice = up;
-      curr.price = q * up;
+      const clean = rawValue.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+      curr.unitPriceText = clean;
+      const q = parseInt(curr.qtyText.replace(/\D/g, ''), 10) || 1;
+      const up = parseInt(clean, 10) || 0;
+      curr.priceText = clean && up > 0 ? String(q * up) : '';
     } else if (field === 'price') {
-      const p = parseInt(value, 10) || 0;
-      const q = curr.qty || 1;
-      curr.price = p;
-      curr.unitPrice = p > 0 ? Math.round(p / q) : 0;
+      const clean = rawValue.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
+      curr.priceText = clean;
+      const q = parseInt(curr.qtyText.replace(/\D/g, ''), 10) || 1;
+      const p = parseInt(clean, 10) || 0;
+      curr.unitPriceText = clean && p > 0 && q > 1 ? String(Math.round(p / q)) : '';
     }
+
     next[index] = curr;
     setItems(next);
   }
 
-
   function handleAddItem() {
-    setItems([...items, { name: '', qty: 1, unitPrice: 0, price: 0 }]);
+    setItems([...items, { name: '', qtyText: '1', unitPriceText: '', priceText: '' }]);
   }
 
   function handleRemoveItem(index: number) {
     setItems(items.filter((_, i) => i !== index));
   }
 
-  const subtotal = items.reduce((sum, item) => sum + item.price, 0);
+  const subtotal = items.reduce((sum, item) => sum + (parseInt(item.priceText.replace(/\D/g, ''), 10) || 0), 0);
+  const taxPercent = parseFloat(taxPercentText) || 0;
+  const servicePercent = parseFloat(servicePercentText) || 0;
   const taxAmount = Math.ceil((subtotal * taxPercent) / 100);
   const serviceAmount = Math.ceil((subtotal * servicePercent) / 100);
   const grandTotal = subtotal + taxAmount + serviceAmount;
+
+  function handleApply() {
+    const formattedItems: OcrDraftItem[] = items.map((item) => {
+      const q = parseInt(item.qtyText.replace(/\D/g, ''), 10) || 1;
+      const up = parseInt(item.unitPriceText.replace(/\D/g, ''), 10) || 0;
+      const p = parseInt(item.priceText.replace(/\D/g, ''), 10) || (up > 0 ? q * up : 0);
+      return {
+        name: item.name.trim(),
+        ...(q > 1 ? { qty: q } : {}),
+        ...(up > 0 && q > 1 ? { unitPrice: up } : {}),
+        price: p,
+      };
+    });
+
+    onApply({
+      items: formattedItems,
+      taxPercent,
+      servicePercent,
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/45">
@@ -214,7 +251,6 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
           </div>
         )}
 
-
         {/* Step 2: Loading */}
         {step === 'loading' && (
           <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
@@ -255,17 +291,20 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
                     <div className="flex w-20 flex-none items-center gap-1 rounded-input border border-border bg-surface px-2 py-1.5">
                       <span className="font-inter text-xs text-sub">Qty</span>
                       <input
-                        type="number"
-                        value={item.qty ?? 1}
+                        type="text"
+                        inputMode="numeric"
+                        value={item.qtyText}
                         onChange={(e) => handleItemChange(idx, 'qty', e.target.value)}
+                        placeholder="1"
                         className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
                       />
                     </div>
                     <div className="flex flex-1 items-center gap-1 rounded-input border border-border bg-surface px-2 py-1.5">
                       <span className="font-mono text-[11px] text-sub">@Rp</span>
                       <input
-                        type="number"
-                        value={item.unitPrice || ''}
+                        type="text"
+                        inputMode="numeric"
+                        value={item.unitPriceText ? formatNumberWithCommas(item.unitPriceText) : ''}
                         onChange={(e) => handleItemChange(idx, 'unitPrice', e.target.value)}
                         placeholder="Satuan"
                         className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
@@ -274,10 +313,11 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
                     <div className="flex flex-1 items-center gap-1 rounded-input border border-border bg-surface px-2 py-1.5">
                       <span className="font-mono text-[11px] text-sub">Total</span>
                       <input
-                        type="number"
-                        value={item.price || ''}
+                        type="text"
+                        inputMode="numeric"
+                        value={item.priceText ? formatNumberWithCommas(item.priceText) : ''}
                         onChange={(e) => handleItemChange(idx, 'price', e.target.value)}
-                        placeholder="Total"
+                        placeholder="0"
                         className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
                       />
                     </div>
@@ -297,22 +337,30 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
             {/* Tax & Service percents */}
             <div className="grid grid-cols-2 gap-3 pt-2">
               <div className="flex flex-col gap-1">
-                <label htmlFor="tax-percent-input" className="font-inter text-xs font-semibold text-sub">Pajak (%)</label>
+                <label htmlFor="tax-percent-input" className="font-inter text-xs font-semibold text-sub">
+                  Pajak (%)
+                </label>
                 <input
                   id="tax-percent-input"
-                  type="number"
-                  value={taxPercent}
-                  onChange={(e) => setTaxPercent(Number(e.target.value))}
+                  type="text"
+                  inputMode="decimal"
+                  value={taxPercentText}
+                  onChange={(e) => setTaxPercentText(e.target.value.replace(/[^0-9.]/g, '').replace(/^0+(?=\d)/, ''))}
+                  placeholder="0"
                   className="rounded-input border border-border bg-surface px-3 py-2 font-mono text-sm text-text"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor="service-percent-input" className="font-inter text-xs font-semibold text-sub">Service Charge (%)</label>
+                <label htmlFor="service-percent-input" className="font-inter text-xs font-semibold text-sub">
+                  Service Charge (%)
+                </label>
                 <input
                   id="service-percent-input"
-                  type="number"
-                  value={servicePercent}
-                  onChange={(e) => setServicePercent(Number(e.target.value))}
+                  type="text"
+                  inputMode="decimal"
+                  value={servicePercentText}
+                  onChange={(e) => setServicePercentText(e.target.value.replace(/[^0-9.]/g, '').replace(/^0+(?=\d)/, ''))}
+                  placeholder="0"
                   className="rounded-input border border-border bg-surface px-3 py-2 font-mono text-sm text-text"
                 />
               </div>
@@ -339,7 +387,7 @@ export default function OcrScanSheet({ isOpen, onClose, onApply }: OcrScanSheetP
             </div>
 
             <button
-              onClick={() => onApply({ items, taxPercent, servicePercent })}
+              onClick={handleApply}
               className="w-full rounded-input bg-accent py-3 font-inter text-sm font-bold text-onAccent"
             >
               Pakai hasil ini

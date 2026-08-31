@@ -99,8 +99,8 @@ export default function ItemRow({
           <div className="flex w-[80px] flex-none items-center gap-1 rounded-input border border-border bg-bg px-2.5 py-2">
             <span className="font-inter text-xs text-sub">Qty</span>
             <input
-              value={qtyText ?? '1'}
-              onChange={(e) => onQtyChange(e.target.value.replace(/[^0-9]/g, ''))}
+              value={qtyText ?? ''}
+              onChange={(e) => onQtyChange(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
               inputMode="numeric"
               placeholder="1"
               className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
@@ -113,7 +113,7 @@ export default function ItemRow({
             <span className="font-mono text-[11px] text-sub">@Rp</span>
             <input
               value={unitPriceText ? formatNumberWithCommas(unitPriceText) : ''}
-              onChange={(e) => onUnitPriceChange(e.target.value.replace(/[^0-9]/g, ''))}
+              onChange={(e) => onUnitPriceChange(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
               inputMode="numeric"
               placeholder="Satuan"
               className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"
@@ -125,7 +125,7 @@ export default function ItemRow({
           <span className="font-mono text-[11px] text-sub">Total</span>
           <input
             value={priceText ? formatNumberWithCommas(priceText) : ''}
-            onChange={(e) => onPriceChange(e.target.value.replace(/[^0-9]/g, ''))}
+            onChange={(e) => onPriceChange(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
             inputMode="numeric"
             placeholder="0"
             className="w-full border-none bg-transparent font-mono text-sm text-text outline-none"

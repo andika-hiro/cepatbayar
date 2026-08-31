@@ -89,15 +89,16 @@ export default function AddEditSubTripSheet({
   }
 
   function handleItemQtyChange(key: string, newQtyText: string) {
+    const cleanQtyText = newQtyText.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
     setItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
-        const qty = parseInt(newQtyText, 10) || 1;
-        const unitPrice = parseInt(item.unitPriceText, 10) || (parseInt(item.priceText, 10) || 0);
-        const newPriceText = unitPrice > 0 ? String(qty * unitPrice) : item.priceText;
+        const qty = parseInt(cleanQtyText, 10) || 1;
+        const unitPrice = parseInt(item.unitPriceText.replace(/\D/g, ''), 10) || 0;
+        const newPriceText = cleanQtyText && unitPrice > 0 ? String(qty * unitPrice) : item.priceText;
         return {
           ...item,
-          qtyText: newQtyText,
+          qtyText: cleanQtyText,
           unitPriceText: unitPrice > 0 ? String(unitPrice) : item.unitPriceText,
           priceText: newPriceText,
         };
@@ -106,38 +107,40 @@ export default function AddEditSubTripSheet({
   }
 
   function handleItemUnitPriceChange(key: string, newUnitPriceText: string) {
+    const cleanUnitPriceText = newUnitPriceText.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
     setItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
-        const qty = parseInt(item.qtyText, 10) || 1;
-        const unitPrice = parseInt(newUnitPriceText, 10) || 0;
+        const qty = parseInt(item.qtyText.replace(/\D/g, ''), 10) || 1;
+        const unitPrice = parseInt(cleanUnitPriceText, 10) || 0;
         return {
           ...item,
-          unitPriceText: newUnitPriceText,
-          priceText: String(qty * unitPrice),
+          unitPriceText: cleanUnitPriceText,
+          priceText: cleanUnitPriceText && unitPrice > 0 ? String(qty * unitPrice) : '',
         };
       })
     );
   }
 
   function handleItemPriceChange(key: string, newPriceText: string) {
+    const cleanPriceText = newPriceText.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
     setItems((prev) =>
       prev.map((item) => {
         if (item.key !== key) return item;
-        const qty = parseInt(item.qtyText, 10) || 1;
-        const total = parseInt(newPriceText, 10) || 0;
+        const qty = parseInt(item.qtyText.replace(/\D/g, ''), 10) || 1;
+        const total = parseInt(cleanPriceText, 10) || 0;
         const unitPrice = total > 0 ? Math.round(total / qty) : 0;
         return {
           ...item,
-          priceText: newPriceText,
+          priceText: cleanPriceText,
           unitPriceText: unitPrice > 0 ? String(unitPrice) : '',
         };
       })
     );
   }
 
-  const [taxPercentText, setTaxPercentText] = useState(initialData ? String(initialData.taxPercent) : '0');
-  const [servicePercentText, setServicePercentText] = useState(initialData ? String(initialData.servicePercent) : '0');
+  const [taxPercentText, setTaxPercentText] = useState(initialData && initialData.taxPercent > 0 ? String(initialData.taxPercent) : '');
+  const [servicePercentText, setServicePercentText] = useState(initialData && initialData.servicePercent > 0 ? String(initialData.servicePercent) : '');
   const [payerOpen, setPayerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,19 +165,19 @@ export default function AddEditSubTripSheet({
 
   function handleApplyOcr(draft: { items: { name: string; qty?: number; unitPrice?: number; price: number }[]; taxPercent: number; servicePercent: number }) {
     setSplitMode('per_item');
-    setTaxPercentText(String(draft.taxPercent));
-    setServicePercentText(String(draft.servicePercent));
+    setTaxPercentText(draft.taxPercent > 0 ? String(draft.taxPercent) : '');
+    setServicePercentText(draft.servicePercent > 0 ? String(draft.servicePercent) : '');
     setItems(
       draft.items.map((item, idx) => {
         const qty = item.qty || 1;
-        const price = item.price;
+        const price = item.price || 0;
         const unitPrice = item.unitPrice || (price > 0 ? Math.round(price / qty) : 0);
         return {
           key: `ocr-item-${idx}-${Date.now()}`,
           name: item.name,
           qtyText: String(qty),
           unitPriceText: unitPrice > 0 ? String(unitPrice) : '',
-          priceText: String(price),
+          priceText: price > 0 ? String(price) : '',
           participants: members.map((m) => ({ memberId: m.id, billedToMemberId: null })),
         };
       })
@@ -336,7 +339,7 @@ export default function AddEditSubTripSheet({
               <span className="font-mono text-sm text-sub">Rp</span>
               <input
                 value={amountText ? formatNumberWithCommas(amountText) : ''}
-                onChange={(e) => setAmountText(e.target.value.replace(/[^0-9]/g, ''))}
+                onChange={(e) => setAmountText(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, ''))}
                 inputMode="numeric"
                 placeholder="0"
                 className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
@@ -380,7 +383,7 @@ export default function AddEditSubTripSheet({
               <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
                 <input
                   value={taxPercentText}
-                  onChange={(e) => setTaxPercentText(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) => setTaxPercentText(e.target.value.replace(/[^0-9.]/g, '').replace(/^0+(?=\d)/, ''))}
                   inputMode="decimal"
                   placeholder="0"
                   className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
@@ -394,7 +397,7 @@ export default function AddEditSubTripSheet({
               <div className="flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-3">
                 <input
                   value={servicePercentText}
-                  onChange={(e) => setServicePercentText(e.target.value.replace(/[^0-9.]/g, ''))}
+                  onChange={(e) => setServicePercentText(e.target.value.replace(/[^0-9.]/g, '').replace(/^0+(?=\d)/, ''))}
                   inputMode="decimal"
                   placeholder="0"
                   className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"
@@ -415,7 +418,7 @@ export default function AddEditSubTripSheet({
             <span className="font-mono text-sm text-sub">Rp</span>
             <input
               value={discountText}
-              onChange={(e) => setDiscountText(formatNumberWithCommas(e.target.value))}
+              onChange={(e) => setDiscountText(formatNumberWithCommas(e.target.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '')))}
               inputMode="numeric"
               placeholder="0 (misal: 25,000)"
               className="flex-1 border-none bg-transparent font-mono text-sm text-text outline-none"

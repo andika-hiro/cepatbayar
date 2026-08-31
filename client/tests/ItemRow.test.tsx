@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import ItemRow from '../src/components/ItemRow';
@@ -92,5 +92,31 @@ describe('ItemRow', () => {
     await user.click(screen.getByText('Tagihkan ke →'));
     await user.click(screen.getByRole('button', { name: 'Aji' }));
     expect(onParticipantsChange).toHaveBeenCalledWith([{ memberId: 1, billedToMemberId: 2 }]);
+  });
+
+  it('strips leading zeros from price and qty inputs', () => {
+    const onPriceChange = vi.fn();
+
+    render(
+      <ItemRow
+        index={0}
+        name="Test Item"
+        qtyText="1"
+        unitPriceText="10000"
+        priceText=""
+        participants={[]}
+        members={members}
+        canRemove={false}
+        onNameChange={() => {}}
+        onPriceChange={onPriceChange}
+        onParticipantsChange={() => {}}
+        onRemove={() => {}}
+      />,
+    );
+
+    const totalInput = screen.getByPlaceholderText('0');
+    fireEvent.change(totalInput, { target: { value: '05000' } });
+
+    expect(onPriceChange).toHaveBeenCalledWith('5000');
   });
 });

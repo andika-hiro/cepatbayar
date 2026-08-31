@@ -239,7 +239,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export interface OcrScanResult {
-  items: { name: string; price: number }[];
+  items: { name: string; price: number; qty?: number; unitPrice?: number }[];
   taxPercent: number;
   servicePercent: number;
   total: number;
